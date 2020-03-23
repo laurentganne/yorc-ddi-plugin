@@ -1,0 +1,136 @@
+tosca_definitions_version: yorc_tosca_simple_yaml_1_0
+
+metadata:
+  template_name: ddi-types
+  template_version: 0.1.0
+  template_author: yorc
+
+imports:
+  - <yorc-types.yml>
+
+artifact_types:
+  org.ddi.artifacts.Deployment:
+    derived_from: tosca.artifacts.Deployment
+node_types:
+  org.ddi.nodes.pub.DDIToCloudJob:
+    derived_from: tosca.nodes.Root
+    abstract: true
+    description: >
+      Transfer datasets from DDI to Cloud instances (abstract)
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
+      ddi_dataset_path:
+        description: Path of the DDI dataset to transfer to a cloud instance
+        type: string
+        required: true
+      dss_dataset_path:
+        description: Path where to transfer the dataset in DSS
+        type: string
+        required: true
+    attributes:
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
+    capabilities:
+      ddicloud:
+        type: org.ddi.capabilities.DDIToCloud
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        delete:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
+            DSS_DATASET_PATH: { get_property: [SELF, dss_dataset_path] }
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        run:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        cancel:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+  org.ddi.nodes.DDIToCloudJob:
+    derived_from: org.ddi.nodes.pub.DDIToCloudJob
+    description: >
+      Transfer datasets from DDI to Cloud instances
+  org.ddi.nodes.pub.DeleteCloudDataJob:
+    derived_from: tosca.nodes.Root
+    abstract: true
+    description: >
+      Delete a dataset from DSS (abstract)
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
+      dss_dataset_path:
+        description: Path where to transfer the dataset in DSS
+        type: string
+        required: true
+    attributes:
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
+    capabilities:
+      dssdelete:
+        type: org.ddi.capabilities.DeleteCloudData
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        delete:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            DSS_DATASET_PATH: { get_property: [SELF, dss_dataset_path] }
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        run:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        cancel:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+  org.ddi.nodes.DeleteCloudDataJob:
+    derived_from: org.ddi.nodes.pub.DeleteCloudDataJob
+    description: >
+      Transfer datasets from DDI to Cloud instances
+capability_types:
+  org.ddi.capabilities.DDIToCloud:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability fulfilling requirements of a node requiring to be
+      associated with a DDIToCloud Job.
+  org.ddi.capabilities.DeleteCloudData:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability fulfilling requirements of a node requiring to be
+      associated with a DeleteCloudData Job.

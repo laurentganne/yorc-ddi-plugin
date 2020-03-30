@@ -24,19 +24,19 @@ import (
 )
 
 const (
-	ddiStagingStageREST             = "/stage"
-	ddiStagingDeleteREST            = "/delete"
-	locationURLPropertyName         = "url"
-	locationDDIAreaPropertyName     = "ddi_area"
-	locationStagingAreaPropertyName = "staging_area"
-	locationDSSAreaPropertyName     = "dss_area"
+	ddiStagingStageREST                  = "/stage"
+	ddiStagingDeleteREST                 = "/delete"
+	locationURLPropertyName              = "url"
+	locationDDIAreaPropertyName          = "ddi_area"
+	locationHPCStagingAreaPropertyName   = "hpc_staging_area"
+	locationCloudStagingAreaPropertyName = "cloud_staging_area"
 )
 
 // Client is the client interface to Distrbuted Data Infrastructure (DDI) service
 type Client interface {
-	SubmitDDIToCloudDataTransfer(token, ddiSourcePath, dssDestinationPath string) (string, error)
+	SubmitDDIToCloudDataTransfer(token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
 	SubmitDDIDataDeletion(token, path string) (string, error)
-	SubmitDSSDataDeletion(token, path string) (string, error)
+	SubmitCloudStagingAreaDataDeletion(token, path string) (string, error)
 	GetDataTransferRequestStatus(token, requestID string) (string, error)
 	GetDeletionRequestStatus(token, requestID string) (string, error)
 }
@@ -52,44 +52,44 @@ func GetClient(locationProps config.DynamicMap) (Client, error) {
 	if ddiArea == "" {
 		return nil, errors.Errorf("No DDI area defined in location")
 	}
-	stagingArea := locationProps.GetString(locationStagingAreaPropertyName)
-	if stagingArea == "" {
-		return nil, errors.Errorf("No staging area defined in location")
+	hpcStagingArea := locationProps.GetString(locationHPCStagingAreaPropertyName)
+	if hpcStagingArea == "" {
+		return nil, errors.Errorf("No HPC staging area defined in location")
 	}
-	dssArea := locationProps.GetString(locationDSSAreaPropertyName)
-	if dssArea == "" {
-		return nil, errors.Errorf("No DSS area defined in location")
+	cloudStagingArea := locationProps.GetString(locationCloudStagingAreaPropertyName)
+	if cloudStagingArea == "" {
+		return nil, errors.Errorf("No Cloud staging area defined in location")
 	}
 
 	return &ddiClient{
-		ddiArea:     ddiArea,
-		stagingArea: stagingArea,
-		dssArea:     dssArea,
-		httpClient:  getHTTPClient(url),
+		ddiArea:          ddiArea,
+		hpcStagingArea:   hpcStagingArea,
+		cloudStagingArea: cloudStagingArea,
+		httpClient:       getHTTPClient(url),
 	}, nil
 }
 
 type ddiClient struct {
-	ddiArea     string
-	stagingArea string
-	dssArea     string
-	httpClient  *httpclient
+	ddiArea          string
+	hpcStagingArea   string
+	cloudStagingArea string
+	httpClient       *httpclient
 }
 
 // SubmitDDIToCloudDataTransfer submits a data transfer request from DDI to Cloud
-func (d *ddiClient) SubmitDDIToCloudDataTransfer(token, ddiSourcePath, dssDestinationPath string) (string, error) {
+func (d *ddiClient) SubmitDDIToCloudDataTransfer(token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error) {
 
 	request := DataTransferRequest{
 		SourceSystem: d.ddiArea,
 		SourcePath:   ddiSourcePath,
-		TargetSystem: d.dssArea,
-		TargetPath:   dssDestinationPath,
+		TargetSystem: d.cloudStagingArea,
+		TargetPath:   cloudStagingAreaDestinationPath,
 	}
 	var response SubmittedRequestInfo
 	err := d.httpClient.doRequest(http.MethodPost, ddiStagingStageREST,
 		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed to submit DDI %s to Cloud %s data transfer", ddiSourcePath, dssDestinationPath)
+		err = errors.Wrapf(err, "Failed to submit DDI %s to Cloud %s data transfer", ddiSourcePath, cloudStagingAreaDestinationPath)
 	}
 
 	return response.RequestID, err
@@ -112,18 +112,18 @@ func (d *ddiClient) SubmitDDIDataDeletion(token, path string) (string, error) {
 	return response.RequestID, err
 }
 
-// SubmitDSSDataDeletion submits a DSS data deletion request
-func (d *ddiClient) SubmitDSSDataDeletion(token, path string) (string, error) {
+// SubmitCloudStagingAreaDataDeletion submits a Cloud staging area data deletion request
+func (d *ddiClient) SubmitCloudStagingAreaDataDeletion(token, path string) (string, error) {
 
 	request := DeleteDataRequest{
-		TargetSystem: d.dssArea,
+		TargetSystem: d.cloudStagingArea,
 		TargetPath:   path,
 	}
 	var response SubmittedRequestInfo
 	err := d.httpClient.doRequest(http.MethodDelete, ddiStagingDeleteREST,
 		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed to submit DSS data %s deletion", path)
+		err = errors.Wrapf(err, "Failed to submit Cloud staging area data %s deletion", path)
 	}
 
 	return response.RequestID, err

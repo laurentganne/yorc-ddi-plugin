@@ -26,8 +26,8 @@ node_types:
         description: Path of the DDI dataset to transfer to a cloud instance
         type: string
         required: true
-      dss_dataset_path:
-        description: Path where to transfer the dataset in DSS
+      cloud_staging_area_dataset_path:
+        description: Path where to transfer the dataset in Cloud staging area
         type: string
         required: true
     attributes:
@@ -54,7 +54,7 @@ node_types:
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
-            DSS_DATASET_PATH: { get_property: [SELF, dss_dataset_path] }
+            CLOUD_STAGING_AREA_DATASET_PATH: { get_property: [SELF, cloud_staging_area_dataset_path] }
           implementation:
             file: "embedded"
             type: org.ddi.artifacts.Deployment
@@ -74,14 +74,14 @@ node_types:
     derived_from: tosca.nodes.Root
     abstract: true
     description: >
-      Delete a dataset from DSS (abstract)
+      Delete a dataset from Cloud staging area (abstract)
     properties:
       token:
         description: Access token
         type: string
         required: true
-      dss_dataset_path:
-        description: Path where to transfer the dataset in DSS
+        cloud_staging_area_dataset_path:
+        description: Path where to transfer the dataset in Cloud staging area
         type: string
         required: true
     attributes:
@@ -90,7 +90,7 @@ node_types:
         description: >
           ID of the DDI request created
     capabilities:
-      dssdelete:
+      cloud_delete:
         type: org.ddi.capabilities.DeleteCloudData
     interfaces:
       Standard:
@@ -107,7 +107,7 @@ node_types:
           TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
-            DSS_DATASET_PATH: { get_property: [SELF, dss_dataset_path] }
+            CLOUD_STAGING_AREA_DATASET_PATH: { get_property: [SELF, cloud_staging_area_dataset_path] }
           implementation:
             file: "embedded"
             type: org.ddi.artifacts.Deployment

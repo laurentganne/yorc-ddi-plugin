@@ -87,7 +87,7 @@ func (e *DeleteCloudDataExecution) Execute(ctx context.Context) error {
 	case tosca.RunnableSubmitOperationName:
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Submitting Cloud data deletion request %q", e.NodeName)
-		err = e.SubmitDSSDataDeletion(ctx)
+		err = e.SubmitCloudStagingAreaDataDeletion(ctx)
 		if err != nil {
 			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 				"Failed to submit Cloud data deletion for node %q, error %s", e.NodeName, err.Error())
@@ -140,7 +140,8 @@ func (e *DeleteCloudDataExecution) getValueFromEnvInputs(envVar string) string {
 
 }
 
-func (e *DeleteCloudDataExecution) SubmitDSSDataDeletion(ctx context.Context) error {
+// SubmitCloudStagingAreaDataDeletion deletes a dataset from the Cloud staging area
+func (e *DeleteCloudDataExecution) SubmitCloudStagingAreaDataDeletion(ctx context.Context) error {
 
 	ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
 	if err != nil {
@@ -152,12 +153,12 @@ func (e *DeleteCloudDataExecution) SubmitDSSDataDeletion(ctx context.Context) er
 		return errors.Errorf("Failed to get token")
 	}
 
-	dataPath := e.getValueFromEnvInputs(dssDatasetPathEnvVar)
+	dataPath := e.getValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
 	if dataPath == "" {
 		return errors.Errorf("Failed to get path of dataset to delete from Cloud storage")
 	}
 
-	requestID, err := ddiClient.SubmitDSSDataDeletion(token, dataPath)
+	requestID, err := ddiClient.SubmitCloudStagingAreaDataDeletion(token, dataPath)
 	if err != nil {
 		return err
 	}

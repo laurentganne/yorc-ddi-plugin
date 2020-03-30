@@ -34,13 +34,13 @@ import (
 )
 
 const (
-	installOperation         = "install"
-	uninstallOperation       = "uninstall"
-	infrastructureType       = "ddi"
-	requestIDConsulAttribute = "request_id"
-	tokenEnvVar              = "TOKEN"
-	ddiDatasetPathEnvVar     = "DDI_DATASET_PATH"
-	dssDatasetPathEnvVar     = "DSS_DATASET_PATH"
+	installOperation                  = "install"
+	uninstallOperation                = "uninstall"
+	infrastructureType                = "ddi"
+	requestIDConsulAttribute          = "request_id"
+	tokenEnvVar                       = "TOKEN"
+	ddiDatasetPathEnvVar              = "DDI_DATASET_PATH"
+	cloudStagingAreaDatasetPathEnvVar = "CLOUD_STAGING_AREA_DATASET_PATH"
 )
 
 // DDIToCloudExecution holds DDI to Cloud data transfer job Execution properties
@@ -168,7 +168,7 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 		return errors.Errorf("Failed to get path of dataset to transfer from DDI")
 	}
 
-	destPath := e.getValueFromEnvInputs(dssDatasetPathEnvVar)
+	destPath := e.getValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
 	if destPath == "" {
 		return errors.Errorf("Failed to get path of dataset to transfer from DDI")
 	}

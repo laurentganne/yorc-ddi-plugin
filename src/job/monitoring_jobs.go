@@ -32,18 +32,13 @@ const (
 	// DataTransferAction is the action of transferring a dataset
 	DataTransferAction = "transfer-request-monitoring"
 	// CloudDataDeleteAction is the action of deleting a dataset from Cloud storage
-	CloudDataDeleteAction     = "cloud-data-delete-monitoring"
-	actionDataSessionID       = "sessionID"
-	requestStatusPending      = "PENDING"
-	requestStatusRunning      = "RUNNING"
-	requestStatusCompleted    = "COMPLETED"
-	requestStatusFailed       = "FAILED"
-	requestStatusCanceled     = "CANCELED"
-	actionDataOffsetKeyFormat = "%d_%d_%d"
-	taskFailurePrefix         = "Task Failed, reason: "
+	CloudDataDeleteAction  = "cloud-data-delete-monitoring"
+	requestStatusPending   = "PENDING"
+	requestStatusRunning   = "RUNNING"
+	requestStatusCompleted = "COMPLETED"
+	requestStatusFailed    = "FAILED"
+	taskFailurePrefix      = "Task Failed, reason: "
 )
-
-type fileType int
 
 // ActionOperator holds function allowing to execute an action
 type ActionOperator struct {
@@ -140,7 +135,7 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 
 	previousRequestStatus, err := deployments.GetInstanceStateString(ctx, deploymentID, actionData.nodeName, "0")
 	if err != nil {
-		return true, errors.Wrapf(err, "failed to get instance state for request %d", actionData.requestID)
+		return true, errors.Wrapf(err, "failed to get instance state for request %s", actionData.requestID)
 	}
 
 	// See if monitoring must be continued and set job state if terminated

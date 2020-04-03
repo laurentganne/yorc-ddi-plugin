@@ -16,8 +16,16 @@ artifact_types:
     description: Docker Container Image
     derived_from: tosca.artifacts.Deployment.Image
 node_types:
-  org.ddi.nodes.pub.DDIToCloudJob:
+  org.ddi.nodes.pub.CloudJob:
     derived_from: tosca.nodes.Root
+    abstract: true
+    description: >
+      Parent type of DDI cloud-related jobs (abstract)
+    capabilities:
+      cloud_staging_area_access:
+        type: org.ddi.capabilities.CloudStagingAreaAccess
+  org.ddi.nodes.pub.DDIToCloudJob:
+    derived_from: org.ddi.nodes.pub.CloudJob
     abstract: true
     description: >
       Transfer datasets from DDI to Cloud instances (abstract)
@@ -74,6 +82,65 @@ node_types:
     derived_from: org.ddi.nodes.pub.DDIToCloudJob
     description: >
       Transfer datasets from DDI to Cloud instances
+  org.ddi.nodes.pub.CloudToDDIJob:
+    derived_from: org.ddi.nodes.pub.CloudJob
+    abstract: true
+    description: >
+      Transfer datasets from Cloud staging area to DDI (abstract)
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
+      cloud_staging_area_dataset_path:
+        description: Path of dataset in Cloud staging area to transfer
+        type: string
+        required: true
+      ddi_dataset_path:
+        description: Path where to transfer the dataset in DDI
+        type: string
+        required: true
+    attributes:
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
+    capabilities:
+      ddicloud:
+        type: org.ddi.capabilities.DDIToCloud
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        delete:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
+            CLOUD_STAGING_AREA_DATASET_PATH: { get_property: [SELF, cloud_staging_area_dataset_path] }
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        run:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        cancel:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+  org.ddi.nodes.CloudToDDIJob:
+    derived_from: org.ddi.nodes.pub.CloudToDDIJob
+    abstract: true
+    description: >
+      Transfer datasets from Cloud staging area to DDI
   org.ddi.nodes.pub.DeleteCloudDataJob:
     derived_from: tosca.nodes.Root
     abstract: true
@@ -133,6 +200,23 @@ capability_types:
     description: >
       A capability fulfilling requirements of a node requiring to be
       associated with a DDIToCloud Job.
+  org.ddi.capabilities.CloudStagingAreaAccess:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability providing details on the access to Cloud Staging area
+    attributes:
+      remote_file_system:
+        type: string
+        description: remote file system to mount to access the staging area
+      mount_options:
+        type: string
+        description: mount options to use
+      user_id:
+        type: string
+        description: ID of the user with read/write access to this file system
+      group_id:
+        type: string
+        description: ID of the unix group with read/write access to this file system
   org.ddi.capabilities.DeleteCloudData:
     derived_from: tosca.capabilities.Root
     description: >

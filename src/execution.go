@@ -20,7 +20,9 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/laurentganne/yorc-ddi-plugin/v1/common"
 	"github.com/laurentganne/yorc-ddi-plugin/v1/job"
+	"github.com/laurentganne/yorc-ddi-plugin/v1/standard"
 
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
@@ -32,7 +34,9 @@ const (
 	ddiInfrastructureType                 = "ddi"
 	locationJobMonitoringTimeInterval     = "job_monitoring_time_interval"
 	locationDefaultMonitoringTimeInterval = 5 * time.Second
+	ddiCloudStagingAreaNodeType           = "org.ddi.nodes.DDICloudStagingArea"
 	ddiToCloudJobType                     = "org.ddi.nodes.DDIToCloudJob"
+	cloudToDDIJobType                     = "org.ddi.nodes.CloudToDDIJob"
 	deleteCloudDataJobType                = "org.ddi.nodes.DeleteCloudDataJob"
 )
 
@@ -53,6 +57,24 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	kv := consulClient.KV()
 
 	var exec Execution
+
+	isCloudStagingAreaNode, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, ddiCloudStagingAreaNodeType)
+	if err != nil {
+		return exec, err
+	}
+
+	if isCloudStagingAreaNode {
+		exec = &standard.CloudStagingAreaExecution{
+			DDIExecution: &common.DDIExecution{
+				KV:           kv,
+				Cfg:          cfg,
+				DeploymentID: deploymentID,
+				TaskID:       taskID,
+				NodeName:     nodeName,
+				Operation:    operation,
+			},
+		}
+	}
 
 	locationMgr, err := locations.GetManager(cfg)
 	if err != nil {
@@ -76,15 +98,18 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	}
 	if isDeleteCloudDataJob {
 		exec = &job.DeleteCloudDataExecution{
-			KV:                     kv,
-			Cfg:                    cfg,
-			DeploymentID:           deploymentID,
-			TaskID:                 taskID,
-			NodeName:               nodeName,
-			Operation:              operation,
-			MonitoringTimeInterval: monitoringTimeInterval,
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Operation:    operation,
+				},
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
 		}
-
 		return exec, exec.ResolveExecution(ctx)
 	}
 
@@ -94,13 +119,39 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	}
 	if isDDIToCloudJob {
 		exec = &job.DDIToCloudExecution{
-			KV:                     kv,
-			Cfg:                    cfg,
-			DeploymentID:           deploymentID,
-			TaskID:                 taskID,
-			NodeName:               nodeName,
-			Operation:              operation,
-			MonitoringTimeInterval: monitoringTimeInterval,
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Operation:    operation,
+				},
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
+		}
+
+		return exec, exec.ResolveExecution(ctx)
+	}
+
+	isCloudToDDIJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, cloudToDDIJobType)
+	if err != nil {
+		return exec, err
+	}
+	if isCloudToDDIJob {
+		exec = &job.CloudToDDIJobExecution{
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Operation:    operation,
+				},
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
 		}
 
 		return exec, exec.ResolveExecution(ctx)

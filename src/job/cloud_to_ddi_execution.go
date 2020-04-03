@@ -25,13 +25,13 @@ import (
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// DDIToCloudExecution holds DDI to Cloud data transfer job Execution properties
-type DDIToCloudExecution struct {
+// CloudToDDIJobExecution holds Cloud staging area to DDI data transfer job Execution properties
+type CloudToDDIJobExecution struct {
 	*DDIJobExecution
 }
 
 // Execute executes a synchronous operation
-func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
+func (e *CloudToDDIJobExecution) Execute(ctx context.Context) error {
 
 	var err error
 	switch strings.ToLower(e.Operation.Name) {
@@ -72,7 +72,7 @@ func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) error {
+func (e *CloudToDDIJobExecution) submitDataTransferRequest(ctx context.Context) error {
 
 	ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
 	if err != nil {
@@ -83,17 +83,18 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 	if token == "" {
 		return errors.Errorf("Failed to get token")
 	}
-	sourcePath := e.getValueFromEnvInputs(ddiDatasetPathEnvVar)
+
+	sourcePath := e.getValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
 	if sourcePath == "" {
-		return errors.Errorf("Failed to get path of dataset to transfer from DDI")
+		return errors.Errorf("Failed to get path of dataset to transfer from Cloud staging area")
 	}
 
-	destPath := e.getValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
+	destPath := e.getValueFromEnvInputs(ddiDatasetPathEnvVar)
 	if destPath == "" {
-		return errors.Errorf("Failed to get path of desired transferred dataset in Cloud staging area")
+		return errors.Errorf("Failed to get path of desired transferred dataset in DDI")
 	}
 
-	requestID, err := ddiClient.SubmitDDIToCloudDataTransfer(token, sourcePath, destPath)
+	requestID, err := ddiClient.SubmitCloudToDDIDataTransfer(token, sourcePath, destPath)
 	if err != nil {
 		return err
 	}

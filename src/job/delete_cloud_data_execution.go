@@ -17,58 +17,17 @@ package job
 import (
 	"context"
 	"strings"
-	"time"
 
-	"github.com/hashicorp/consul/api"
 	"github.com/pkg/errors"
 
-	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
 	"github.com/ystia/yorc/v4/events"
-	"github.com/ystia/yorc/v4/log"
-	"github.com/ystia/yorc/v4/prov"
-	"github.com/ystia/yorc/v4/prov/operations"
 	"github.com/ystia/yorc/v4/tosca"
 )
 
 // DeleteCloudDataExecution holds Cloud data deletion job Execution properties
 type DeleteCloudDataExecution struct {
-	KV                     *api.KV
-	Cfg                    config.Configuration
-	DeploymentID           string
-	TaskID                 string
-	NodeName               string
-	Operation              prov.Operation
-	EnvInputs              []*operations.EnvInput
-	VarInputsNames         []string
-	RequestID              string
-	MonitoringTimeInterval time.Duration
-}
-
-// ExecuteAsync executes an asynchronous operation
-func (e *DeleteCloudDataExecution) ExecuteAsync(ctx context.Context) (*prov.Action, time.Duration, error) {
-	if strings.ToLower(e.Operation.Name) != tosca.RunnableRunOperationName {
-		return nil, 0, errors.Errorf("Unsupported asynchronous operation %q", e.Operation.Name)
-	}
-
-	requestID, err := e.getRequestID(ctx)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	token := e.getValueFromEnvInputs(tokenEnvVar)
-	if token == "" {
-		return nil, 0, errors.Errorf("Failed to get token")
-	}
-
-	data := make(map[string]string)
-	data["taskID"] = e.TaskID
-	data["nodeName"] = e.NodeName
-	data["token"] = token
-	data["requestID"] = requestID
-	data["token"] = token
-
-	return &prov.Action{ActionType: CloudDataDeleteAction, Data: data}, e.MonitoringTimeInterval, err
+	*DDIJobExecution
 }
 
 // Execute executes a synchronous operation
@@ -113,33 +72,6 @@ func (e *DeleteCloudDataExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-// ResolveExecution resolves inputs before the execution of an operation
-func (e *DeleteCloudDataExecution) ResolveExecution(ctx context.Context) error {
-	return e.resolveInputs(ctx)
-}
-
-func (e *DeleteCloudDataExecution) resolveInputs(ctx context.Context) error {
-	var err error
-	log.Debugf("Get environment inputs for node:%q", e.NodeName)
-	e.EnvInputs, e.VarInputsNames, err = operations.ResolveInputsWithInstances(
-		ctx, e.DeploymentID, e.NodeName, e.TaskID, e.Operation, nil, nil)
-	log.Debugf("Environment inputs: %v", e.EnvInputs)
-	return err
-}
-
-func (e *DeleteCloudDataExecution) getValueFromEnvInputs(envVar string) string {
-
-	var result string
-	for _, envInput := range e.EnvInputs {
-		if envInput.Name == envVar {
-			result = envInput.Value
-			break
-		}
-	}
-	return result
-
-}
-
 // SubmitCloudStagingAreaDataDeletion deletes a dataset from the Cloud staging area
 func (e *DeleteCloudDataExecution) SubmitCloudStagingAreaDataDeletion(ctx context.Context) error {
 
@@ -153,7 +85,7 @@ func (e *DeleteCloudDataExecution) SubmitCloudStagingAreaDataDeletion(ctx contex
 		return errors.Errorf("Failed to get token")
 	}
 
-	dataPath := e.getValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
+	dataPath := e.GetValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
 	if dataPath == "" {
 		return errors.Errorf("Failed to get path of dataset to delete from Cloud storage")
 	}
@@ -170,16 +102,4 @@ func (e *DeleteCloudDataExecution) SubmitCloudStagingAreaDataDeletion(ctx contex
 		err = errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
 	}
 	return err
-}
-
-func (e *DeleteCloudDataExecution) getRequestID(ctx context.Context) (string, error) {
-
-	val, err := deployments.GetInstanceAttributeValue(ctx, e.DeploymentID, e.NodeName, "0", requestIDConsulAttribute)
-	if err != nil {
-		return "", errors.Wrapf(err, "Failed to get request ID for deployment %s node %s", e.DeploymentID, e.NodeName)
-	} else if val == nil {
-		return "", errors.Errorf("Found no request id for deployment %s node %s", e.DeploymentID, e.NodeName)
-	}
-
-	return val.RawString(), err
 }

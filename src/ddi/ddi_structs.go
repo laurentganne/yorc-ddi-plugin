@@ -14,6 +14,20 @@
 
 package ddi
 
+// LocationHPCStagingArea holds properties of a HPC staging area
+type LocationHPCStagingArea struct {
+	Name string `yaml:"name" json:"name"`
+}
+
+// LocationCloudStagingArea holds properties of a HPC staging area
+type LocationCloudStagingArea struct {
+	Name             string `yaml:"name" json:"name"`
+	RemoteFileSystem string `yaml:"remote_file_system" json:"remote_file_system"`
+	MountOptions     string `yaml:"mount_options" json:"mount_options"`
+	UserID           string `yaml:"user_id" json:"user_id"`
+	GroupID          string `yaml:"group_id" json:"group_id"`
+}
+
 // DataTransferRequest holds parameters of a data transfer request
 type DataTransferRequest struct {
 	SourceSystem string `json:"source_system"`

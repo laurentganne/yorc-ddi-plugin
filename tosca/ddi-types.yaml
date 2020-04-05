@@ -24,15 +24,27 @@ node_types:
     derived_from: org.ddi.nodes.pub.Cloud
     description: >
       Gets the DDI Cloud Staging Area to use according to the location of the associated Compute Instance
-    properties:
-      token:
-        description: Access token
+    # Atributes added here in addition to capability attributes, so that they
+    # can be referenced with the REQ_TARGET keyword
+    attributes:
+      remote_file_system:
         type: string
-        required: true
+        description: remote file system to mount to access the staging area
+      mount_type:
+        type: string
+        description: Type of file system
+      mount_options:
+        type: string
+        description: mount options to use
+      user_id:
+        type: string
+        description: ID of the user with read/write access to this file system
+      group_id:
+        type: string
+        description: ID of the unix group with read/write access to this file system
     requirements:
-      - host:
-          type_requirement: host
-          capability: tosca.capabilities.Container
+      - os:
+          capability: tosca.capabilities.OperatingSystem
           node: tosca.nodes.Compute 
           relationship: org.ddi.relationships.SameSite
           occurrences: [1, 1]
@@ -43,24 +55,6 @@ node_types:
             file: "embedded"
             type: org.ddi.artifacts.Deployment
         delete:
-          implementation:
-            file: "embedded"
-            type: org.ddi.artifacts.Deployment
-      tosca.interfaces.node.lifecycle.Runnable:
-        inputs:
-          TOKEN: { get_property: [SELF, token] }
-        submit:
-          inputs:
-            DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
-            CLOUD_STAGING_AREA_DATASET_PATH: { get_property: [SELF, cloud_staging_area_dataset_path] }
-          implementation:
-            file: "embedded"
-            type: org.ddi.artifacts.Deployment
-        run:
-          implementation:
-            file: "embedded"
-            type: org.ddi.artifacts.Deployment
-        cancel:
           implementation:
             file: "embedded"
             type: org.ddi.artifacts.Deployment
@@ -191,7 +185,7 @@ node_types:
         description: Access token
         type: string
         required: true
-        cloud_staging_area_dataset_path:
+      cloud_staging_area_dataset_path:
         description: Path where to transfer the dataset in Cloud staging area
         type: string
         required: true
@@ -248,6 +242,9 @@ capability_types:
       remote_file_system:
         type: string
         description: remote file system to mount to access the staging area
+      mount_type:
+        type: string
+        description: Type of file system
       mount_options:
         type: string
         description: mount options to use
@@ -267,3 +264,4 @@ relationship_types:
     derived_from: tosca.relationships.DependsOn
     description: >
       Source must must be on same site as target
+    valid_target_types: [ tosca.capabilities.OperatingSystem ]

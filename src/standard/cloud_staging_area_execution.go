@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	associatedComputeInstanceRequirementName = "host"
+	associatedComputeInstanceRequirementName = "os"
 )
 
 // CloudStagingAreaExecution holds Cloud staging area Execution properties
@@ -116,14 +116,14 @@ func (e *CloudStagingAreaExecution) getDDILocationFromComputeLocation(ctx contex
 	var locationProps config.DynamicMap
 
 	// Convention: the last 3 letters of this location identiy the datacenter
-	dcID := computeLocation[(len(computeLocation) - 3):]
+	dcID := strings.ToLower(computeLocation[(len(computeLocation) - 3):])
 	locations, err := locationMgr.GetLocations()
 	if err != nil {
 		return locationProps, err
 	}
 
 	for _, loc := range locations {
-		if loc.Type == common.DDIInfrastructureType && strings.HasSuffix(computeLocation, dcID) {
+		if loc.Type == common.DDIInfrastructureType && strings.HasSuffix(strings.ToLower(loc.Name), dcID) {
 			locationProps, err := locationMgr.GetLocationProperties(loc.Name, common.DDIInfrastructureType)
 			return locationProps, err
 		}

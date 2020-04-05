@@ -23,6 +23,7 @@ type LocationHPCStagingArea struct {
 type LocationCloudStagingArea struct {
 	Name             string `yaml:"name" json:"name"`
 	RemoteFileSystem string `yaml:"remote_file_system" json:"remote_file_system"`
+	MountType        string `yaml:"mount_type" json:"mount_type"`
 	MountOptions     string `yaml:"mount_options" json:"mount_options"`
 	UserID           string `yaml:"user_id" json:"user_id"`
 	GroupID          string `yaml:"group_id" json:"group_id"`

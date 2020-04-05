@@ -84,6 +84,11 @@ func (e *DDIExecution) SetCloudStagingAreaAccessCapabilityAttributes(ctx context
 		return err
 	}
 	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		cloudStagingAreaAccessCapability, "mount_type", cloudAreaProps.MountType)
+	if err != nil {
+		return err
+	}
+	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		cloudStagingAreaAccessCapability, "mount_options", cloudAreaProps.MountOptions)
 	if err != nil {
 		return err
@@ -95,6 +100,32 @@ func (e *DDIExecution) SetCloudStagingAreaAccessCapabilityAttributes(ctx context
 	}
 	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		cloudStagingAreaAccessCapability, "group_id", cloudAreaProps.GroupID)
+	if err != nil {
+		return err
+	}
 
+	// Adding as well node template attributes
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		"remote_file_system", cloudAreaProps.RemoteFileSystem)
+	if err != nil {
+		return err
+	}
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		"mount_type", cloudAreaProps.MountType)
+	if err != nil {
+		return err
+	}
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		"mount_options", cloudAreaProps.MountOptions)
+	if err != nil {
+		return err
+	}
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		"user_id", cloudAreaProps.UserID)
+	if err != nil {
+		return err
+	}
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		"group_id", cloudAreaProps.GroupID)
 	return err
 }

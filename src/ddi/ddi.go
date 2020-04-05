@@ -24,12 +24,17 @@ import (
 )
 
 const (
-	ddiStagingStageREST                  = "/stage"
-	ddiStagingDeleteREST                 = "/delete"
-	locationURLPropertyName              = "url"
-	locationDDIAreaPropertyName          = "ddi_area"
-	locationHPCStagingAreaPropertyName   = "hpc_staging_area"
-	locationCloudStagingAreaPropertyName = "cloud_staging_area"
+	ddiStagingStageREST                                  = "/stage"
+	ddiStagingDeleteREST                                 = "/delete"
+	locationURLPropertyName                              = "url"
+	locationDDIAreaPropertyName                          = "ddi_area"
+	locationHPCStagingAreaNamePropertyName               = "hpc_staging_area_name"
+	locationCloudStagingAreaNamePropertyName             = "cloud_staging_area_name"
+	locationCloudStagingAreaRemoteFileSystemPropertyName = "cloud_staging_area_remote_file_system"
+	locationCloudStagingAreaMountTypePropertyName        = "cloud_staging_area_mount_type"
+	locationCloudStagingAreaMountOptionsPropertyName     = "cloud_staging_area_mount_options"
+	locationCloudStagingAreaUserIDPropertyName           = "cloud_staging_area_user_id"
+	locationCloudStagingAreaGroupIDPropertyName          = "cloud_staging_area_group_id"
 )
 
 // Client is the client interface to Distrbuted Data Infrastructure (DDI) service
@@ -54,14 +59,16 @@ func GetClient(locationProps config.DynamicMap) (Client, error) {
 	if ddiArea == "" {
 		return nil, errors.Errorf("No %s property defined in DDI location configuration", locationDDIAreaPropertyName)
 	}
-	hpcStagingArea, ok := locationProps.Get(locationHPCStagingAreaPropertyName).(LocationHPCStagingArea)
-	if !ok {
-		return nil, errors.Errorf("No %s property defined in DDI location configuration", locationHPCStagingAreaPropertyName)
-	}
-	cloudStagingArea, ok := locationProps.Get(locationCloudStagingAreaPropertyName).(LocationCloudStagingArea)
-	if !ok {
-		return nil, errors.Errorf("No %s property defined in DDI location configuration", locationCloudStagingAreaPropertyName)
-	}
+	var hpcStagingArea LocationHPCStagingArea
+	hpcStagingArea.Name = locationProps.GetString(locationHPCStagingAreaNamePropertyName)
+	var cloudStagingArea LocationCloudStagingArea
+	cloudStagingArea.Name = locationProps.GetString(locationCloudStagingAreaNamePropertyName)
+	cloudStagingArea.RemoteFileSystem = locationProps.GetString(locationCloudStagingAreaRemoteFileSystemPropertyName)
+	cloudStagingArea.MountType = locationProps.GetString(locationCloudStagingAreaMountTypePropertyName)
+	cloudStagingArea.MountOptions = locationProps.GetString(locationCloudStagingAreaMountOptionsPropertyName)
+	cloudStagingArea.UserID = locationProps.GetString(locationCloudStagingAreaUserIDPropertyName)
+	cloudStagingArea.GroupID = locationProps.GetString(locationCloudStagingAreaGroupIDPropertyName)
+
 	return &ddiClient{
 		ddiArea:          ddiArea,
 		hpcStagingArea:   hpcStagingArea,

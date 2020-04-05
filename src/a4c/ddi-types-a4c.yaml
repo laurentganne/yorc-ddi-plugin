@@ -16,26 +16,64 @@ artifact_types:
     description: Docker Container Image
     derived_from: tosca.artifacts.Deployment.Image
 node_types:
-  org.ddi.nodes.pub.CloudJob:
+  org.ddi.nodes.pub.Cloud:
     derived_from: tosca.nodes.Root
     abstract: true
     description: >
-      Parent type of DDI cloud-related jobs (abstract)
+      Parent type of DDI cloud-related node types (abstract)
     capabilities:
       cloud_staging_area_access:
         type: org.ddi.capabilities.CloudStagingAreaAccess
+  org.ddi.nodes.DDICloudStagingArea:
+    derived_from: org.ddi.nodes.pub.Cloud
+    description: >
+      Gets the DDI Cloud Staging Area to use according to the location of the associated Compute Instance
+    # Atributes added here in addition to capability attributes, so that they
+    # can be referenced with the REQ_TARGET keyword
+    attributes:
+      remote_file_system:
+        type: string
+        description: remote file system to mount to access the staging area
+      mount_type:
+        type: string
+        description: Type of file system
+      mount_options:
+        type: string
+        description: mount options to use
+      user_id:
+        type: string
+        description: ID of the user with read/write access to this file system
+      group_id:
+        type: string
+        description: ID of the unix group with read/write access to this file system
+    requirements:
+      - os:
+          capability: tosca.capabilities.OperatingSystem
+          node: tosca.nodes.Compute 
+          relationship: org.ddi.relationships.SameSite
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        delete:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
   org.ddi.nodes.pub.DDIToCloudJob:
-    derived_from: org.ddi.nodes.pub.CloudJob
+    derived_from: org.ddi.nodes.pub.Cloud
     abstract: true
     description: >
-      Transfer datasets from DDI to Cloud instances (abstract)
+      Transfer datasets from DDI to Cloud staging area (abstract)
     properties:
       token:
         description: Access token
         type: string
         required: true
       ddi_dataset_path:
-        description: Path of the DDI dataset to transfer to a cloud instance
+        description: Path of the DDI dataset to transfer to the Cloud staging area
         type: string
         required: true
       cloud_staging_area_dataset_path:
@@ -81,9 +119,9 @@ node_types:
   org.ddi.nodes.DDIToCloudJob:
     derived_from: org.ddi.nodes.pub.DDIToCloudJob
     description: >
-      Transfer datasets from DDI to Cloud instances
+      Transfer datasets from DDI to Cloud staging area
   org.ddi.nodes.pub.CloudToDDIJob:
-    derived_from: org.ddi.nodes.pub.CloudJob
+    derived_from: org.ddi.nodes.pub.Cloud
     abstract: true
     description: >
       Transfer datasets from Cloud staging area to DDI (abstract)
@@ -152,7 +190,7 @@ node_types:
         type: string
         required: true
       cloud_staging_area_dataset_path:
-        description: Path in cloud staging area of the dataset to delete
+        description: Path where to transfer the dataset in Cloud staging area
         type: string
         required: true
     attributes:
@@ -208,6 +246,9 @@ capability_types:
       remote_file_system:
         type: string
         description: remote file system to mount to access the staging area
+      mount_type:
+        type: string
+        description: Type of file system
       mount_options:
         type: string
         description: mount options to use
@@ -222,3 +263,9 @@ capability_types:
     description: >
       A capability fulfilling requirements of a node requiring to be
       associated with a DeleteCloudData Job.
+relationship_types:
+  org.ddi.relationships.SameSite:
+    derived_from: tosca.relationships.DependsOn
+    description: >
+      Source must must be on same site as target
+    valid_target_types: [ tosca.capabilities.OperatingSystem ]

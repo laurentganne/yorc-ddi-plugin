@@ -74,6 +74,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				Operation:    operation,
 			},
 		}
+		return exec, exec.ResolveExecution(ctx)
 	}
 
 	locationMgr, err := locations.GetManager(cfg)

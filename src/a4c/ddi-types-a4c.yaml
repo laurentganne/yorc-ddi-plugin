@@ -86,7 +86,7 @@ node_types:
         description: >
           ID of the DDI request created
     capabilities:
-      ddicloud:
+      ddi_to_cloud:
         type: org.ddi.capabilities.DDIToCloud
     interfaces:
       Standard:
@@ -130,10 +130,6 @@ node_types:
         description: Access token
         type: string
         required: true
-      cloud_staging_area_dataset_path:
-        description: Path of dataset in Cloud staging area to transfer
-        type: string
-        required: true
       ddi_dataset_path:
         description: Path where to transfer the dataset in DDI
         type: string
@@ -144,8 +140,13 @@ node_types:
         description: >
           ID of the DDI request created
     capabilities:
-      ddicloud:
-        type: org.ddi.capabilities.DDIToCloud
+      cloud_to_ddi:
+        type: org.ddi.capabilities.CloudToDDI
+    requirements:
+      - dataset_provider:
+          capability: org.ddi.capabilities.CloudAreaDatasetProvider
+          relationship: org.ddi.relationships.DatasetProvider
+          occurrences: [1, 1]
     interfaces:
       Standard:
         create:
@@ -162,7 +163,7 @@ node_types:
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
-            CLOUD_STAGING_AREA_DATASET_PATH: { get_property: [SELF, cloud_staging_area_dataset_path] }
+            CLOUD_STAGING_AREA_DATASET_PATH: { get_property: [REQ_TARGET, dataset_provider, dataset_path] }
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -176,7 +177,6 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
   org.ddi.nodes.CloudToDDIJob:
     derived_from: org.ddi.nodes.pub.CloudToDDIJob
-    abstract: true
     description: >
       Transfer datasets from Cloud staging area to DDI
   org.ddi.nodes.pub.DeleteCloudDataJob:
@@ -189,10 +189,6 @@ node_types:
         description: Access token
         type: string
         required: true
-      cloud_staging_area_dataset_path:
-        description: Path where to transfer the dataset in Cloud staging area
-        type: string
-        required: true
     attributes:
       request_id:
         type: string
@@ -201,6 +197,11 @@ node_types:
     capabilities:
       cloud_delete:
         type: org.ddi.capabilities.DeleteCloudData
+    requirements:
+      - dataset_provider:
+          capability: org.ddi.capabilities.CloudAreaDatasetProvider
+          relationship: org.ddi.relationships.DatasetProvider
+          occurrences: [1, 1]
     interfaces:
       Standard:
         create:
@@ -216,7 +217,7 @@ node_types:
           TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
-            CLOUD_STAGING_AREA_DATASET_PATH: { get_property: [SELF, cloud_staging_area_dataset_path] }
+            CLOUD_STAGING_AREA_DATASET_PATH: { get_property: [REQ_TARGET, dataset_provider, dataset_path] }
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -236,8 +237,11 @@ capability_types:
   org.ddi.capabilities.DDIToCloud:
     derived_from: tosca.capabilities.Root
     description: >
-      A capability fulfilling requirements of a node requiring to be
-      associated with a DDIToCloud Job.
+      A capability fulfilling requirements of a node requiring to be associated with a DDIToCloud Job.
+  org.ddi.capabilities.CloudToDDI:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability fulfilling requirements of a node requiring to be associated with a CloudToDDI Job.
   org.ddi.capabilities.CloudStagingAreaAccess:
     derived_from: tosca.capabilities.Root
     description: >
@@ -263,9 +267,22 @@ capability_types:
     description: >
       A capability fulfilling requirements of a node requiring to be
       associated with a DeleteCloudData Job.
+  org.ddi.capabilities.CloudAreaDatasetProvider:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability of a node providing a dataset in the Cloud Staging area
+    attributes:
+      dataset_path:
+        type: string
+        description: Path of the dataset in Cloud staging area
 relationship_types:
   org.ddi.relationships.SameSite:
     derived_from: tosca.relationships.DependsOn
     description: >
       Source must must be on same site as target
     valid_target_types: [ tosca.capabilities.OperatingSystem ]
+  org.ddi.relationships.DatasetProvider:
+    derived_from: tosca.relationships.DependsOn
+    description: >
+      Relationship with a provider of dataset
+    valid_target_types: [ org.ddi.capabilities.CloudAreaDatasetProvider ]

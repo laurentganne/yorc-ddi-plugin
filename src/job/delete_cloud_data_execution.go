@@ -16,12 +16,14 @@ package job
 
 import (
 	"context"
+	"path"
 	"strings"
 
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/deployments"
 	"github.com/ystia/yorc/v4/events"
+	"github.com/ystia/yorc/v4/log"
 	"github.com/ystia/yorc/v4/tosca"
 )
 
@@ -89,6 +91,12 @@ func (e *DeleteCloudDataExecution) SubmitCloudStagingAreaDataDeletion(ctx contex
 	if dataPath == "" {
 		return errors.Errorf("Failed to get path of dataset to delete from Cloud storage")
 	}
+
+	// DDI API expects the path to delete to start with a /
+	if len(dataPath) > 0 {
+		dataPath = path.Join("/", dataPath)
+	}
+	log.Debugf("Submitting deletion of %s", dataPath)
 
 	requestID, err := ddiClient.SubmitCloudStagingAreaDataDeletion(token, dataPath)
 	if err != nil {

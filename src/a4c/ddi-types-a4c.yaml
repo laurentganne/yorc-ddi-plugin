@@ -130,7 +130,7 @@ node_types:
         description: Access token
         type: string
         required: true
-      ddi_dataset_path:
+      ddi_path:
         description: Path where to transfer the dataset in DDI
         type: string
         required: true
@@ -139,6 +139,9 @@ node_types:
         type: string
         description: >
           ID of the DDI request created
+      ddi_dataset_path:
+        type: string
+        description: Path to the dataset transferred in DDI
     capabilities:
       cloud_to_ddi:
         type: org.ddi.capabilities.CloudToDDI
@@ -162,8 +165,8 @@ node_types:
           TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
-            DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
-            CLOUD_STAGING_AREA_DATASET_PATH: { get_property: [REQ_TARGET, dataset_provider, dataset_path] }
+            DDI_PATH: { get_property: [SELF, ddi_path] }
+            CLOUD_STAGING_AREA_DATASET_PATH: { get_attribute: [REQ_TARGET, dataset_provider, dataset_path] }
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -217,7 +220,7 @@ node_types:
           TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
-            CLOUD_STAGING_AREA_DATASET_PATH: { get_property: [REQ_TARGET, dataset_provider, dataset_path] }
+            CLOUD_STAGING_AREA_DATASET_PATH: { get_attribute: [REQ_TARGET, dataset_provider, dataset_path] }
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -242,6 +245,10 @@ capability_types:
     derived_from: tosca.capabilities.Root
     description: >
       A capability fulfilling requirements of a node requiring to be associated with a CloudToDDI Job.
+    attributes:
+      ddi_dataset_path:
+        type: string
+        description: Path to the dataset transferred in DDI
   org.ddi.capabilities.CloudStagingAreaAccess:
     derived_from: tosca.capabilities.Root
     description: >

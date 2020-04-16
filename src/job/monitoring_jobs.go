@@ -127,10 +127,10 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 	case status == "Data deleted":
 		requestStatus = requestStatusCompleted
 	case strings.HasPrefix(status, taskFailurePrefix):
-		status = requestStatusFailed
+		requestStatus = requestStatusFailed
 		errorMessage = status[(len(taskFailurePrefix) - 1):]
 	default:
-		return true, errors.Errorf("Unexpexted :%q", action.ActionType)
+		return true, errors.Errorf("Unexpected status :%q", status)
 	}
 
 	previousRequestStatus, err := deployments.GetInstanceStateString(ctx, deploymentID, actionData.nodeName, "0")

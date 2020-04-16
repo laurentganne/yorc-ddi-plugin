@@ -16,6 +16,7 @@ package job
 
 import (
 	"context"
+	"path"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -89,7 +90,7 @@ func (e *CloudToDDIJobExecution) submitDataTransferRequest(ctx context.Context) 
 		return errors.Errorf("Failed to get path of dataset to transfer from Cloud staging area")
 	}
 
-	destPath := e.getValueFromEnvInputs(ddiDatasetPathEnvVar)
+	destPath := e.getValueFromEnvInputs(ddiPathEnvVar)
 	if destPath == "" {
 		return errors.Errorf("Failed to get path of desired transferred dataset in DDI")
 	}
@@ -103,7 +104,23 @@ func (e *CloudToDDIJobExecution) submitDataTransferRequest(ctx context.Context) 
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		requestIDConsulAttribute, requestID)
 	if err != nil {
-		err = errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
+		return errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
 	}
+
+	// Store the path of this dataset in DDI
+	datasetName := sourcePath[strings.LastIndex(sourcePath, "/")+1:]
+	ddiDatasetPath := path.Join(destPath, datasetName)
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		ddiDatasetPathConsulAttribute, ddiDatasetPath)
+	if err != nil {
+		return errors.Wrapf(err, "Failed to store DDI dataset path attribute value %s", ddiDatasetPath)
+	}
+
+	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		ddiToCloudCapability, ddiDatasetPathConsulAttribute, ddiDatasetPath)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to store DDI dataset path capanility attribute value %s", ddiDatasetPath)
+	}
+
 	return err
 }

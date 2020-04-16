@@ -36,15 +36,18 @@ const (
 	installOperation                  = "install"
 	uninstallOperation                = "uninstall"
 	requestIDConsulAttribute          = "request_id"
+	ddiDatasetPathConsulAttribute     = "ddi_dataset_path"
 	tokenEnvVar                       = "TOKEN"
 	ddiDatasetPathEnvVar              = "DDI_DATASET_PATH"
+	ddiPathEnvVar                     = "DDI_PATH"
 	cloudStagingAreaDatasetPathEnvVar = "CLOUD_STAGING_AREA_DATASET_PATH"
+	ddiToCloudCapability              = "ddi_to_cloud"
 )
 
 // DDIJobExecution holds DDI job Execution properties
 type DDIJobExecution struct {
 	*common.DDIExecution
-	RequestID              string
+	ActionType             string
 	MonitoringTimeInterval time.Duration
 }
 
@@ -67,11 +70,10 @@ func (e *DDIJobExecution) ExecuteAsync(ctx context.Context) (*prov.Action, time.
 	data := make(map[string]string)
 	data["taskID"] = e.TaskID
 	data["nodeName"] = e.NodeName
-	data["token"] = token
 	data["requestID"] = requestID
 	data["token"] = token
 
-	return &prov.Action{ActionType: DataTransferAction, Data: data}, e.MonitoringTimeInterval, err
+	return &prov.Action{ActionType: e.ActionType, Data: data}, e.MonitoringTimeInterval, err
 }
 
 // ResolveExecution resolves inputs before the execution of an operation

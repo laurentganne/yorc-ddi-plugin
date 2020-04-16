@@ -108,6 +108,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					NodeName:     nodeName,
 					Operation:    operation,
 				},
+				ActionType:             job.CloudDataDeleteAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
 			},
 		}
@@ -129,6 +130,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					NodeName:     nodeName,
 					Operation:    operation,
 				},
+				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
 			},
 		}
@@ -151,6 +153,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					NodeName:     nodeName,
 					Operation:    operation,
 				},
+				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
 			},
 		}

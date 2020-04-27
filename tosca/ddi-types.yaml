@@ -20,10 +20,10 @@ node_types:
     capabilities:
       cloud_staging_area_access:
         type: org.ddi.capabilities.CloudStagingAreaAccess
-  org.ddi.nodes.DDICloudStagingArea:
+  org.ddi.nodes.EnableCloudStagingAreaAccessJob:
     derived_from: org.ddi.nodes.pub.Cloud
     description: >
-      Gets the DDI Cloud Staging Area to use according to the location of the associated Compute Instance
+      Enable the access to the Cloud Staging Area for a Compute Instance
     # Atributes added here in addition to capability attributes, so that they
     # can be referenced with the REQ_TARGET keyword
     attributes:
@@ -42,10 +42,14 @@ node_types:
       group_id:
         type: string
         description: ID of the unix group with read/write access to this file system
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
     requirements:
       - os:
           capability: tosca.capabilities.OperatingSystem
-          node: tosca.nodes.Compute 
+          node: tosca.nodes.Compute
           relationship: org.ddi.relationships.SameSite
           occurrences: [1, 1]
     interfaces:
@@ -55,6 +59,65 @@ node_types:
             file: "embedded"
             type: org.ddi.artifacts.Deployment
         delete:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        run:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        cancel:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+  org.ddi.nodes.DisableCloudStagingAreaAccessJob:
+    derived_from: org.ddi.nodes.pub.Cloud
+    description: >
+      Disable the access to the Cloud Staging Area for a Compute Instance
+    attributes:
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
+    requirements:
+      - os:
+          capability: tosca.capabilities.OperatingSystem
+          node: tosca.nodes.Compute
+          relationship: org.ddi.relationships.SameSite
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        delete:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        run:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        cancel:
           implementation:
             file: "embedded"
             type: org.ddi.artifacts.Deployment

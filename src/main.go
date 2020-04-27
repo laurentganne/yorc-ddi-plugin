@@ -59,7 +59,11 @@ func main() {
 	}
 
 	// Set ActionFunc that implements an ActionOperator for DDI jobs
-	servConfig.ActionTypes = []string{job.DataTransferAction, job.CloudDataDeleteAction}
+	servConfig.ActionTypes = []string{
+		job.EnableCloudAccessAction,
+		job.DisableCloudAccessAction,
+		job.DataTransferAction,
+		job.CloudDataDeleteAction}
 	servConfig.ActionFunc = func() prov.ActionOperator {
 		return new(job.ActionOperator)
 	}

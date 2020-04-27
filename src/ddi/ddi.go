@@ -24,6 +24,8 @@ import (
 )
 
 const (
+	enableCloudAccessREST                                = "/cloud/add"
+	disableCloudAccessREST                               = "/cloud/remove"
 	ddiStagingStageREST                                  = "/stage"
 	ddiStagingDeleteREST                                 = "/delete"
 	locationURLPropertyName                              = "url"
@@ -39,6 +41,10 @@ const (
 
 // Client is the client interface to Distrbuted Data Infrastructure (DDI) service
 type Client interface {
+	SubmitEnableCloudAccess(token, ipAddress string) (string, error)
+	SubmitDisableCloudAccess(token, ipAddress string) (string, error)
+	GetEnableCloudAccessRequestStatus(token, requestID string) (string, error)
+	GetDisableCloudAccessRequestStatus(token, requestID string) (string, error)
 	SubmitDDIToCloudDataTransfer(token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
 	SubmitCloudToDDIDataTransfer(token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error)
 	SubmitDDIDataDeletion(token, path string) (string, error)
@@ -82,6 +88,62 @@ type ddiClient struct {
 	hpcStagingArea   LocationHPCStagingArea
 	cloudStagingArea LocationCloudStagingArea
 	httpClient       *httpclient
+}
+
+// SubmitEnableCloudAccess submits a request to enable the access to the Cloud
+// staging area for a given IP address
+func (d *ddiClient) SubmitEnableCloudAccess(token, ipAddress string) (string, error) {
+
+	var response SubmittedRequestInfo
+	err := d.httpClient.doRequest(http.MethodPost, path.Join(enableCloudAccessREST, ipAddress),
+		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, nil, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit requrest do enable cloud staging area access to %s",
+			ipAddress)
+	}
+
+	return response.RequestID, err
+}
+
+// SubmitDisableCloudAccess submits a request to disable the access to the Cloud
+// staging area for a given IP address
+func (d *ddiClient) SubmitDisableCloudAccess(token, ipAddress string) (string, error) {
+
+	var response SubmittedRequestInfo
+	err := d.httpClient.doRequest(http.MethodPost, path.Join(disableCloudAccessREST, ipAddress),
+		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, nil, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit requrest do disable cloud staging area access to %s",
+			ipAddress)
+	}
+
+	return response.RequestID, err
+}
+
+// GetEnableCloudAccessRequestStatus returns the status of a request to enable a cloud access
+func (d *ddiClient) GetEnableCloudAccessRequestStatus(token, requestID string) (string, error) {
+
+	var response RequestStatus
+	err := d.httpClient.doRequest(http.MethodGet, path.Join(enableCloudAccessREST, requestID),
+		[]int{http.StatusOK}, token, nil, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit get status for enable cloud access request %s", requestID)
+	}
+
+	return response.Status, err
+}
+
+// GetEnableCloudAccessRequestStatus returns the status of a request to disable a cloud access
+func (d *ddiClient) GetDisableCloudAccessRequestStatus(token, requestID string) (string, error) {
+
+	var response RequestStatus
+	err := d.httpClient.doRequest(http.MethodGet, path.Join(disableCloudAccessREST, requestID),
+		[]int{http.StatusOK}, token, nil, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit get status for enable cloud access request %s", requestID)
+	}
+
+	return response.Status, err
 }
 
 // SubmitDDIToCloudDataTransfer submits a data transfer request from DDI to Cloud

@@ -41,6 +41,7 @@ const (
 	ddiDatasetPathEnvVar              = "DDI_DATASET_PATH"
 	ddiPathEnvVar                     = "DDI_PATH"
 	cloudStagingAreaDatasetPathEnvVar = "CLOUD_STAGING_AREA_DATASET_PATH"
+	ipAddressEnvVar                   = "IP_ADDRESS"
 	ddiToCloudCapability              = "ddi_to_cloud"
 )
 

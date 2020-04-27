@@ -22,7 +22,6 @@ import (
 
 	"github.com/laurentganne/yorc-ddi-plugin/v1/common"
 	"github.com/laurentganne/yorc-ddi-plugin/v1/job"
-	"github.com/laurentganne/yorc-ddi-plugin/v1/standard"
 
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
@@ -34,7 +33,8 @@ const (
 	ddiInfrastructureType                 = "ddi"
 	locationJobMonitoringTimeInterval     = "job_monitoring_time_interval"
 	locationDefaultMonitoringTimeInterval = 5 * time.Second
-	ddiCloudStagingAreaNodeType           = "org.ddi.nodes.DDICloudStagingArea"
+	enableCloudStagingAreaJobType         = "org.ddi.nodes.EnableCloudStagingAreaAccessJob"
+	disableCloudStagingAreaJobType        = "org.ddi.nodes.DisableCloudStagingAreaAccessJob"
 	ddiToCloudJobType                     = "org.ddi.nodes.DDIToCloudJob"
 	cloudToDDIJobType                     = "org.ddi.nodes.CloudToDDIJob"
 	deleteCloudDataJobType                = "org.ddi.nodes.DeleteCloudDataJob"
@@ -58,25 +58,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 
 	var exec Execution
 
-	isCloudStagingAreaNode, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, ddiCloudStagingAreaNodeType)
-	if err != nil {
-		return exec, err
-	}
-
-	if isCloudStagingAreaNode {
-		exec = &standard.CloudStagingAreaExecution{
-			DDIExecution: &common.DDIExecution{
-				KV:           kv,
-				Cfg:          cfg,
-				DeploymentID: deploymentID,
-				TaskID:       taskID,
-				NodeName:     nodeName,
-				Operation:    operation,
-			},
-		}
-		return exec, exec.ResolveExecution(ctx)
-	}
-
 	locationMgr, err := locations.GetManager(cfg)
 	if err != nil {
 		return nil, err
@@ -91,6 +72,52 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	if monitoringTimeInterval <= 0 {
 		// Default value
 		monitoringTimeInterval = locationDefaultMonitoringTimeInterval
+	}
+
+	isEnableCloudStagingAreaJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, enableCloudStagingAreaJobType)
+	if err != nil {
+		return exec, err
+	}
+
+	if isEnableCloudStagingAreaJob {
+		exec = &job.EnableCloudAccessJobExecution{
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Operation:    operation,
+				},
+				ActionType:             job.EnableCloudAccessAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
+		}
+		return exec, exec.ResolveExecution(ctx)
+	}
+
+	isDisableCloudStagingAreaJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, disableCloudStagingAreaJobType)
+	if err != nil {
+		return exec, err
+	}
+
+	if isDisableCloudStagingAreaJob {
+		exec = &job.DisableCloudAccessJobExecution{
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Operation:    operation,
+				},
+				ActionType:             job.DisableCloudAccessAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
+		}
+		return exec, exec.ResolveExecution(ctx)
 	}
 
 	isDeleteCloudDataJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, deleteCloudDataJobType)

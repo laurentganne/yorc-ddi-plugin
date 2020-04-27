@@ -24,10 +24,15 @@ node_types:
     capabilities:
       cloud_staging_area_access:
         type: org.ddi.capabilities.CloudStagingAreaAccess
-  org.ddi.nodes.DDICloudStagingArea:
+  org.ddi.nodes.EnableCloudStagingAreaAccessJob:
     derived_from: org.ddi.nodes.pub.Cloud
     description: >
-      Gets the DDI Cloud Staging Area to use according to the location of the associated Compute Instance
+      Enable the access to the Cloud Staging Area for a Compute Instance
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
     # Atributes added here in addition to capability attributes, so that they
     # can be referenced with the REQ_TARGET keyword
     attributes:
@@ -46,10 +51,14 @@ node_types:
       group_id:
         type: string
         description: ID of the unix group with read/write access to this file system
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
     requirements:
       - os:
           capability: tosca.capabilities.OperatingSystem
-          node: tosca.nodes.Compute 
+          node: tosca.nodes.Compute
           relationship: org.ddi.relationships.SameSite
           occurrences: [1, 1]
     interfaces:
@@ -59,6 +68,70 @@ node_types:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
         delete:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        run:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        cancel:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+  org.ddi.nodes.DisableCloudStagingAreaAccessJob:
+    derived_from: org.ddi.nodes.pub.Cloud
+    description: >
+      Disable the access to the Cloud Staging Area for a Compute Instance
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
+    attributes:
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
+    requirements:
+      - os:
+          capability: tosca.capabilities.OperatingSystem
+          node: tosca.nodes.Compute
+          relationship: org.ddi.relationships.SameSite
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        delete:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        run:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        cancel:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob

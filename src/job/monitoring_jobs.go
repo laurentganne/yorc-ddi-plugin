@@ -29,6 +29,10 @@ import (
 )
 
 const (
+	// EnableCloudAccessAction is the action of enabling the access to cloud staging area
+	EnableCloudAccessAction = "enable-cloud-access"
+	// DisableCloudAccessAction is the action of enabling the access to cloud staging area
+	DisableCloudAccessAction = "disable-cloud-access"
 	// DataTransferAction is the action of transferring a dataset
 	DataTransferAction = "transfer-request-monitoring"
 	// CloudDataDeleteAction is the action of deleting a dataset from Cloud storage
@@ -55,7 +59,8 @@ type actionData struct {
 func (o *ActionOperator) ExecAction(ctx context.Context, cfg config.Configuration, taskID, deploymentID string, action *prov.Action) (bool, error) {
 	log.Debugf("Execute Action with ID:%q, taskID:%q, deploymentID:%q", action.ID, taskID, deploymentID)
 
-	if action.ActionType == DataTransferAction || action.ActionType == CloudDataDeleteAction {
+	if action.ActionType == DataTransferAction || action.ActionType == CloudDataDeleteAction ||
+		action.ActionType == EnableCloudAccessAction || action.ActionType == DisableCloudAccessAction {
 		deregister, err := o.monitorJob(ctx, cfg, deploymentID, action)
 		if err != nil {
 			// action scheduling needs to be unregistered
@@ -103,6 +108,10 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 
 	var status string
 	switch action.ActionType {
+	case EnableCloudAccessAction:
+		status, err = ddiClient.GetEnableCloudAccessRequestStatus(actionData.token, actionData.requestID)
+	case DisableCloudAccessAction:
+		status, err = ddiClient.GetDisableCloudAccessRequestStatus(actionData.token, actionData.requestID)
 	case DataTransferAction:
 		status, err = ddiClient.GetDataTransferRequestStatus(actionData.token, actionData.requestID)
 		// Nothing to do here
@@ -125,6 +134,10 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 	case status == "Transfer completed":
 		requestStatus = requestStatusCompleted
 	case status == "Data deleted":
+		requestStatus = requestStatusCompleted
+	case status == "cloud nfs export added":
+		requestStatus = requestStatusCompleted
+	case status == "cloud nfs export deleted":
 		requestStatus = requestStatusCompleted
 	case strings.HasPrefix(status, taskFailurePrefix):
 		requestStatus = requestStatusFailed

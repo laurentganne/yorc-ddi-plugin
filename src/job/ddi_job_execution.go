@@ -16,6 +16,8 @@ package job
 
 import (
 	"context"
+	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,16 +35,18 @@ import (
 )
 
 const (
-	installOperation                  = "install"
-	uninstallOperation                = "uninstall"
-	requestIDConsulAttribute          = "request_id"
-	ddiDatasetPathConsulAttribute     = "ddi_dataset_path"
-	tokenEnvVar                       = "TOKEN"
-	ddiDatasetPathEnvVar              = "DDI_DATASET_PATH"
-	ddiPathEnvVar                     = "DDI_PATH"
-	cloudStagingAreaDatasetPathEnvVar = "CLOUD_STAGING_AREA_DATASET_PATH"
-	ipAddressEnvVar                   = "IP_ADDRESS"
-	ddiToCloudCapability              = "ddi_to_cloud"
+	installOperation                      = "install"
+	uninstallOperation                    = "uninstall"
+	metadataProperty                      = "metadata"
+	requestIDConsulAttribute              = "request_id"
+	destinationDatasetPathConsulAttribute = "destination_directory_path"
+	tokenEnvVar                           = "TOKEN"
+	ddiDatasetPathEnvVar                  = "DDI_DATASET_PATH"
+	ddiPathEnvVar                         = "DDI_PATH"
+	cloudStagingAreaDatasetPathEnvVar     = "CLOUD_STAGING_AREA_DIRECTORY_PATH"
+	hpcDirectoryPathEnvVar                = "HPC_DIRECTORY_PATH"
+	ipAddressEnvVar                       = "IP_ADDRESS"
+	dataTransferCapability                = "data_transfer"
 )
 
 // DDIJobExecution holds DDI job Execution properties
@@ -102,6 +106,28 @@ func (e *DDIJobExecution) getValueFromEnvInputs(envVar string) string {
 	}
 	return result
 
+}
+
+func (e *DDIJobExecution) getMetadata(ctx context.Context) (ddi.Metadata, error) {
+	var metadata ddi.Metadata
+
+	val, err := deployments.GetNodePropertyValue(ctx, e.DeploymentID, e.NodeName, metadataProperty)
+	if err != nil {
+		return metadata, err
+	}
+	if val != nil && val.RawString() != "" {
+		err = json.Unmarshal([]byte(val.RawString()), &metadata)
+		if err != nil {
+			return metadata, err
+		}
+	}
+
+	// Set the publication yer if not set
+	if metadata.PublicationYear == "" {
+		metadata.PublicationYear = strconv.Itoa(time.Now().Year())
+	}
+
+	return metadata, err
 }
 
 func (e *DDIJobExecution) getRequestID(ctx context.Context) (string, error) {

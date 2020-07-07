@@ -25,13 +25,13 @@ import (
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// DDIToCloudExecution holds DDI to Cloud data transfer job Execution properties
-type DDIToCloudExecution struct {
+// DDIToHPCExecution holds DDI to HOC data transfer job Execution properties
+type DDIToHPCExecution struct {
 	*DDIJobExecution
 }
 
 // Execute executes a synchronous operation
-func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
+func (e *DDIToHPCExecution) Execute(ctx context.Context) error {
 
 	var err error
 	switch strings.ToLower(e.Operation.Name) {
@@ -72,7 +72,7 @@ func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) error {
+func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error {
 
 	ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
 	if err != nil {
@@ -88,9 +88,9 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 		return errors.Errorf("Failed to get path of dataset to transfer from DDI")
 	}
 
-	destPath := e.getValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
+	destPath := e.getValueFromEnvInputs(hpcDirectoryPathEnvVar)
 	if destPath == "" {
-		return errors.Errorf("Failed to get path of desired transferred dataset in Cloud staging area")
+		return errors.Errorf("Failed to get HPC directory path")
 	}
 
 	metadata, err := e.getMetadata(ctx)
@@ -98,7 +98,7 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToCloudDataTransfer(metadata, token, sourcePath, destPath)
+	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, token, sourcePath, destPath)
 	if err != nil {
 		return err
 	}

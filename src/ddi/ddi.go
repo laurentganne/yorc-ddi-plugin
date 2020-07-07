@@ -45,11 +45,12 @@ type Client interface {
 	SubmitDisableCloudAccess(token, ipAddress string) (string, error)
 	GetEnableCloudAccessRequestStatus(token, requestID string) (string, error)
 	GetDisableCloudAccessRequestStatus(token, requestID string) (string, error)
-	SubmitDDIToCloudDataTransfer(token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
-	SubmitCloudToDDIDataTransfer(token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error)
+	SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
+	SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error)
 	SubmitDDIDataDeletion(token, path string) (string, error)
+	SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, hpcDirectoryPath string) (string, error)
 	SubmitCloudStagingAreaDataDeletion(token, path string) (string, error)
-	GetDataTransferRequestStatus(token, requestID string) (string, error)
+	GetDataTransferRequestStatus(token, requestID string) (string, string, error)
 	GetDeletionRequestStatus(token, requestID string) (string, error)
 	GetCloudStagingAreaProperties() LocationCloudStagingArea
 }
@@ -147,9 +148,10 @@ func (d *ddiClient) GetDisableCloudAccessRequestStatus(token, requestID string) 
 }
 
 // SubmitDDIToCloudDataTransfer submits a data transfer request from DDI to Cloud
-func (d *ddiClient) SubmitDDIToCloudDataTransfer(token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error) {
+func (d *ddiClient) SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error) {
 
 	request := DataTransferRequest{
+		Metadata:     metadata,
 		SourceSystem: d.ddiArea,
 		SourcePath:   ddiSourcePath,
 		TargetSystem: d.cloudStagingArea.Name,
@@ -166,9 +168,10 @@ func (d *ddiClient) SubmitDDIToCloudDataTransfer(token, ddiSourcePath, cloudStag
 }
 
 // SubmitCloudToDDIDataTransfer submits a data transfer request from Cloud to DDI
-func (d *ddiClient) SubmitCloudToDDIDataTransfer(token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error) {
+func (d *ddiClient) SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error) {
 
 	request := DataTransferRequest{
+		Metadata:     metadata,
 		SourceSystem: d.cloudStagingArea.Name,
 		SourcePath:   cloudStagingAreaSourcePath,
 		TargetSystem: d.ddiArea,
@@ -218,8 +221,16 @@ func (d *ddiClient) SubmitCloudStagingAreaDataDeletion(token, path string) (stri
 	return response.RequestID, err
 }
 
+// SubmitDDIToHPCDataTransfer submits a data transfer request from DDI to HPC
+func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, hpcDirectoryPath string) (string, error) {
+
+	// TODO: implement DDI to HOC
+	return "DDIToHPCTempRequestID", nil
+}
+
 // GetDataTransferRequestStatus returns the status of a data transfer request
-func (d *ddiClient) GetDataTransferRequestStatus(token, requestID string) (string, error) {
+// and the path of the transferred data on the destination
+func (d *ddiClient) GetDataTransferRequestStatus(token, requestID string) (string, string, error) {
 
 	var response RequestStatus
 	err := d.httpClient.doRequest(http.MethodGet, path.Join(ddiStagingStageREST, requestID),
@@ -228,7 +239,7 @@ func (d *ddiClient) GetDataTransferRequestStatus(token, requestID string) (strin
 		err = errors.Wrapf(err, "Failed to submit get status for data transfer request %s", requestID)
 	}
 
-	return response.Status, err
+	return response.Status, response.TargetPath, err
 }
 
 // GetDeletionRequestStatus returns the status of a deletion request

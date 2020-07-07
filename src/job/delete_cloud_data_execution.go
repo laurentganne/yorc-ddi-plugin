@@ -96,7 +96,7 @@ func (e *DeleteCloudDataExecution) SubmitCloudStagingAreaDataDeletion(ctx contex
 	if len(dataPath) > 0 {
 		dataPath = path.Join("/", dataPath)
 	}
-	log.Debugf("Submitting deletion of %s", dataPath)
+	log.Printf("Submitting deletion of %s", dataPath)
 
 	requestID, err := ddiClient.SubmitCloudStagingAreaDataDeletion(token, dataPath)
 	if err != nil {

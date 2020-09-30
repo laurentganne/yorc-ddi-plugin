@@ -25,13 +25,13 @@ import (
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// DDIToCloudExecution holds DDI to Cloud data transfer job Execution properties
-type DDIToCloudExecution struct {
+// DisableCloudAccessJobExecution holds Cloud staging area access disablement job Execution properties
+type DisableCloudAccessJobExecution struct {
 	*DDIJobExecution
 }
 
 // Execute executes a synchronous operation
-func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
+func (e *DisableCloudAccessJobExecution) Execute(ctx context.Context) error {
 
 	var err error
 	switch strings.ToLower(e.Operation.Name) {
@@ -46,10 +46,10 @@ func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
 	case tosca.RunnableSubmitOperationName:
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Submitting data transfer request %q", e.NodeName)
-		err = e.submitDataTransferRequest(ctx)
+		err = e.submitDisableCloudAccess(ctx)
 		if err != nil {
 			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
-				"Failed to submit data transfer for node %q, error %s", e.NodeName, err.Error())
+				"Failed to submit cloud access disablement for node %q, error %s", e.NodeName, err.Error())
 
 		}
 	case tosca.RunnableCancelOperationName:
@@ -72,7 +72,7 @@ func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) error {
+func (e *DisableCloudAccessJobExecution) submitDisableCloudAccess(ctx context.Context) error {
 
 	ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
 	if err != nil {
@@ -83,22 +83,13 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 	if token == "" {
 		return errors.Errorf("Failed to get token")
 	}
-	sourcePath := e.getValueFromEnvInputs(ddiDatasetPathEnvVar)
-	if sourcePath == "" {
-		return errors.Errorf("Failed to get path of dataset to transfer from DDI")
+
+	ipAddress := e.getValueFromEnvInputs(ipAddressEnvVar)
+	if ipAddress == "" {
+		return errors.Errorf("Failed to get ip address for which to enable access to Cloud staging area")
 	}
 
-	destPath := e.getValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
-	if destPath == "" {
-		return errors.Errorf("Failed to get path of desired transferred dataset in Cloud staging area")
-	}
-
-	metadata, err := e.getMetadata(ctx)
-	if err != nil {
-		return err
-	}
-
-	requestID, err := ddiClient.SubmitDDIToCloudDataTransfer(metadata, token, sourcePath, destPath)
+	requestID, err := ddiClient.SubmitDisableCloudAccess(token, ipAddress)
 	if err != nil {
 		return err
 	}
@@ -107,7 +98,8 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		requestIDConsulAttribute, requestID)
 	if err != nil {
-		err = errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
+		return errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
 	}
+
 	return err
 }

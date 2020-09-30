@@ -6,27 +6,191 @@ metadata:
   template_author: yorc
 
 imports:
+  - heappe-types:0.1.0
   - <yorc-types.yml>
 
 artifact_types:
   org.ddi.artifacts.Deployment:
     derived_from: tosca.artifacts.Deployment
+data_types:
+  org.ddi.types.Metadata:
+    derived_from: tosca.datatypes.Root
+    properties:
+      creator:
+        description: Dataset creators
+        type: list
+        entry_schema:
+          type: string
+        required: false
+      contributor:
+        description: Dataset contributors
+        type: list
+        entry_schema:
+          type: string
+        required: false
+      publisher:
+        description: Dataset publishers
+        type: list
+        entry_schema:
+          type: string
+        required: false
+      owner:
+        description: Dataset owners
+        type: list
+        entry_schema:
+          type: string
+        required: false
+      identifier:
+        description: Dataset identifier
+        type: string
+        required: false
+      publicationYear:
+        description: Dataset year of publication
+        type: string
+        required: false
+      resourceType:
+        description: Dataset resource type
+        type: string
+        required: false
+      title:
+        description: Dataset title
+        type: string
+        required: false
+      relatedIdentifier:
+        description: Dataset related identifier
+        type: list
+        entry_schema:
+          type: string
+        required: false
 node_types:
-  org.ddi.nodes.pub.DDIToCloudJob:
+  org.ddi.nodes.pub.Cloud:
     derived_from: tosca.nodes.Root
     abstract: true
     description: >
-      Transfer datasets from DDI to Cloud instances (abstract)
+      Parent type of DDI cloud-related node types (abstract)
+    capabilities:
+      cloud_staging_area_access:
+        type: org.ddi.capabilities.CloudStagingAreaAccess
+  org.ddi.nodes.EnableCloudStagingAreaAccessJob:
+    derived_from: org.ddi.nodes.pub.Cloud
+    description: >
+      Enable the access to the Cloud Staging Area for a Compute Instance
+    # Atributes added here in addition to capability attributes, so that they
+    # can be referenced with the REQ_TARGET keyword
+    attributes:
+      remote_file_system:
+        type: string
+        description: remote file system to mount to access the staging area
+      mount_type:
+        type: string
+        description: Type of file system
+      mount_options:
+        type: string
+        description: mount options to use
+      user_id:
+        type: string
+        description: ID of the user with read/write access to this file system
+      group_id:
+        type: string
+        description: ID of the unix group with read/write access to this file system
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
+    requirements:
+      - os:
+          capability: tosca.capabilities.OperatingSystem
+          node: tosca.nodes.Compute
+          relationship: org.ddi.relationships.SameSite
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        delete:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        run:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        cancel:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+  org.ddi.nodes.DisableCloudStagingAreaAccessJob:
+    derived_from: org.ddi.nodes.pub.Cloud
+    description: >
+      Disable the access to the Cloud Staging Area for a Compute Instance
+    attributes:
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
+    requirements:
+      - os:
+          capability: tosca.capabilities.OperatingSystem
+          node: tosca.nodes.Compute
+          relationship: org.ddi.relationships.SameSite
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        delete:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        run:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        cancel:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+  org.ddi.nodes.pub.DDIToCloudJob:
+    derived_from: org.ddi.nodes.pub.Cloud
+    abstract: true
+    description: >
+      Transfer datasets from DDI to Cloud staging area (abstract)
     properties:
       token:
         description: Access token
         type: string
         required: true
+      metadata:
+        description: Dataset metadata
+        type: org.ddi.types.Metadata
+        required: false
       ddi_dataset_path:
-        description: Path of the DDI dataset to transfer to a cloud instance
+        description: Path of the DDI dataset to transfer to the Cloud staging area
         type: string
         required: true
-      cloud_staging_area_dataset_path:
+      cloud_staging_area_directory_path:
         description: Path where to transfer the dataset in Cloud staging area
         type: string
         required: true
@@ -35,9 +199,12 @@ node_types:
         type: string
         description: >
           ID of the DDI request created
+      destination_directory_path:
+        type: string
+        description: Path to the dataset transferred in Cloud staging are
     capabilities:
-      ddicloud:
-        type: org.ddi.capabilities.DDIToCloud
+      data_transfer:
+        type: org.ddi.capabilities.DataTransfer
     interfaces:
       Standard:
         create:
@@ -54,7 +221,7 @@ node_types:
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
-            CLOUD_STAGING_AREA_DATASET_PATH: { get_property: [SELF, cloud_staging_area_dataset_path] }
+            CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_property: [SELF, cloud_staging_area_directory_path] }
           implementation:
             file: "embedded"
             type: org.ddi.artifacts.Deployment
@@ -69,29 +236,40 @@ node_types:
   org.ddi.nodes.DDIToCloudJob:
     derived_from: org.ddi.nodes.pub.DDIToCloudJob
     description: >
-      Transfer datasets from DDI to Cloud instances
-  org.ddi.nodes.pub.DeleteCloudDataJob:
-    derived_from: tosca.nodes.Root
+      Transfer datasets from DDI to Cloud staging area
+  org.ddi.nodes.pub.CloudToDDIJob:
+    derived_from: org.ddi.nodes.pub.Cloud
     abstract: true
     description: >
-      Delete a dataset from Cloud staging area (abstract)
+      Transfer datasets from Cloud staging area to DDI (abstract)
     properties:
       token:
         description: Access token
         type: string
         required: true
-        cloud_staging_area_dataset_path:
-        description: Path where to transfer the dataset in Cloud staging area
+      metadata:
+        description: Dataset metadata
+        type: org.ddi.types.Metadata
+        required: false
+      ddi_path:
+        description: Path where to transfer the dataset in DDI
         type: string
-        required: true
     attributes:
       request_id:
         type: string
         description: >
           ID of the DDI request created
+      destination_directory_path:
+        type: string
+        description: Path to the dataset transferred in DDI
     capabilities:
-      cloud_delete:
-        type: org.ddi.capabilities.DeleteCloudData
+      cloud_to_ddi:
+        type: org.ddi.capabilities.CloudToDDI
+    requirements:
+      - dataset_provider:
+          capability: org.ddi.capabilities.CloudAreaDatasetProvider
+          relationship: org.ddi.relationships.DatasetProvider
+          occurrences: [1, 1]
     interfaces:
       Standard:
         create:
@@ -107,7 +285,62 @@ node_types:
           TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
-            CLOUD_STAGING_AREA_DATASET_PATH: { get_property: [SELF, cloud_staging_area_dataset_path] }
+            DDI_PATH: { get_property: [SELF, ddi_path] }
+            CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, dataset_provider, staging_area_directory_path] }
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        run:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        cancel:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+  org.ddi.nodes.CloudToDDIJob:
+    derived_from: org.ddi.nodes.pub.CloudToDDIJob
+    description: >
+      Transfer datasets from Cloud staging area to DDI
+  org.ddi.nodes.pub.DeleteCloudDataJob:
+    derived_from: tosca.nodes.Root
+    abstract: true
+    description: >
+      Delete a dataset from Cloud staging area (abstract)
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
+    attributes:
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
+    capabilities:
+      cloud_delete:
+        type: org.ddi.capabilities.DeleteCloudData
+    requirements:
+      - dataset_provider:
+          capability: org.ddi.capabilities.CloudAreaDatasetProvider
+          relationship: org.ddi.relationships.DatasetProvider
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        delete:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, dataset_provider, staging_area_directory_path] }
           implementation:
             file: "embedded"
             type: org.ddi.artifacts.Deployment
@@ -122,15 +355,124 @@ node_types:
   org.ddi.nodes.DeleteCloudDataJob:
     derived_from: org.ddi.nodes.pub.DeleteCloudDataJob
     description: >
-      Transfer datasets from DDI to Cloud instances
+      Delete a dataset from Cloud staging area
+  org.ddi.nodes.pub.DDIToHPCJob:
+    derived_from: tosca.nodes.Root
+    abstract: true
+    description: >
+      Transfer datasets from DDI to HPC staging area (abstract)
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
+      metadata:
+        description: Dataset metadata
+        type: org.ddi.types.Metadata
+        required: false
+      ddi_dataset_path:
+        description: Path of the DDI dataset to transfer to HPC
+        type: string
+        required: true
+    attributes:
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
+      destination_directory_path:
+        type: string
+        description: Path to the dataset transferred in DDI    
+    capabilities:
+      data_transfer:
+        type: org.ddi.capabilities.DataTransfer
+    requirements:
+      - job:
+          capability: org.heappe.capabilities.HeappeJob
+          node: org.heappe.nodes.Job
+          relationship: org.heappe.relationships.SendInputsToJob
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        delete:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
+            HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        run:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+        cancel:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
+  org.ddi.nodes.DDIToHPCJob:
+    derived_from: org.ddi.nodes.pub.DDIToHPCJob
+    description: >
+      Transfer datasets from DDI to HPC
 capability_types:
-  org.ddi.capabilities.DDIToCloud:
+  org.ddi.capabilities.DataTransfer:
     derived_from: tosca.capabilities.Root
     description: >
-      A capability fulfilling requirements of a node requiring to be
-      associated with a DDIToCloud Job.
+      A capability provided by a DDI Job performing data transfers.
+    attributes:
+      destination_directory_path:
+        type: string
+        description: Path to the dataset transferred in Cloud staging area
+  org.ddi.capabilities.CloudStagingAreaAccess:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability providing details on the access to Cloud Staging area
+    attributes:
+      remote_file_system:
+        type: string
+        description: remote file system to mount to access the staging area
+      mount_type:
+        type: string
+        description: Type of file system
+      mount_options:
+        type: string
+        description: mount options to use
+      user_id:
+        type: string
+        description: ID of the user with read/write access to this file system
+      group_id:
+        type: string
+        description: ID of the unix group with read/write access to this file system
   org.ddi.capabilities.DeleteCloudData:
     derived_from: tosca.capabilities.Root
     description: >
       A capability fulfilling requirements of a node requiring to be
       associated with a DeleteCloudData Job.
+  org.ddi.capabilities.CloudAreaDatasetProvider:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability of a node providing a dataset in the Cloud Staging area
+    attributes:
+      staging_area_directory_path:
+        type: string
+        description: Path of the dataset in Cloud staging area
+relationship_types:
+  org.ddi.relationships.SameSite:
+    derived_from: tosca.relationships.DependsOn
+    description: >
+      Source must must be on same site as target
+    valid_target_types: [ tosca.capabilities.OperatingSystem ]
+  org.ddi.relationships.DatasetProvider:
+    derived_from: tosca.relationships.DependsOn
+    description: >
+      Relationship with a provider of dataset
+    valid_target_types: [ org.ddi.capabilities.CloudAreaDatasetProvider ]

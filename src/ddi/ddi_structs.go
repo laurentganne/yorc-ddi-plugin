@@ -14,12 +14,41 @@
 
 package ddi
 
+// LocationHPCStagingArea holds properties of a HPC staging area
+type LocationHPCStagingArea struct {
+	Name string `yaml:"name" json:"name"`
+}
+
+// LocationCloudStagingArea holds properties of a HPC staging area
+type LocationCloudStagingArea struct {
+	Name             string `yaml:"name" json:"name"`
+	RemoteFileSystem string `yaml:"remote_file_system" json:"remote_file_system"`
+	MountType        string `yaml:"mount_type" json:"mount_type"`
+	MountOptions     string `yaml:"mount_options" json:"mount_options"`
+	UserID           string `yaml:"user_id" json:"user_id"`
+	GroupID          string `yaml:"group_id" json:"group_id"`
+}
+
+// Metadata holds metadata to define for a dataset
+type Metadata struct {
+	Creator           []string `json:"creator,omitempty"`
+	Contributor       []string `json:"contributor,omitempty"`
+	Publisher         []string `json:"publisher,omitempty"`
+	Owner             []string `json:"owner,omitempty"`
+	Identifier        string   `json:"identifier,omitempty"`
+	PublicationYear   string   `json:"publicationYear,omitempty"`
+	ResourceType      string   `json:"resourceType,omitempty"`
+	Title             string   `json:"title,omitempty"`
+	RelatedIdentifier []string `json:"relatedIdentifier,omitempty"`
+}
+
 // DataTransferRequest holds parameters of a data transfer request
 type DataTransferRequest struct {
-	SourceSystem string `json:"source_system"`
-	SourcePath   string `json:"source_path"`
-	TargetSystem string `json:"target_system"`
-	TargetPath   string `json:"target_path"`
+	Metadata     Metadata `json:"metadata,omitempty"`
+	SourceSystem string   `json:"source_system"`
+	SourcePath   string   `json:"source_path"`
+	TargetSystem string   `json:"target_system"`
+	TargetPath   string   `json:"target_path"`
 }
 
 // DeleteDataRequest holds parameters of data to delete
@@ -35,5 +64,6 @@ type SubmittedRequestInfo struct {
 
 // RequestStatus holds the status of a submitted request
 type RequestStatus struct {
-	Status string `json:"status"`
+	Status     string `json:"status"`
+	TargetPath string `json:"target_path,omitempty"`
 }

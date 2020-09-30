@@ -20,6 +20,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/laurentganne/yorc-ddi-plugin/v1/common"
 	"github.com/laurentganne/yorc-ddi-plugin/v1/job"
 
 	"github.com/ystia/yorc/v4/config"
@@ -32,7 +33,11 @@ const (
 	ddiInfrastructureType                 = "ddi"
 	locationJobMonitoringTimeInterval     = "job_monitoring_time_interval"
 	locationDefaultMonitoringTimeInterval = 5 * time.Second
+	enableCloudStagingAreaJobType         = "org.ddi.nodes.EnableCloudStagingAreaAccessJob"
+	disableCloudStagingAreaJobType        = "org.ddi.nodes.DisableCloudStagingAreaAccessJob"
 	ddiToCloudJobType                     = "org.ddi.nodes.DDIToCloudJob"
+	ddiToHPCJobType                       = "org.ddi.nodes.DDIToHPCJob"
+	cloudToDDIJobType                     = "org.ddi.nodes.CloudToDDIJob"
 	deleteCloudDataJobType                = "org.ddi.nodes.DeleteCloudDataJob"
 )
 
@@ -70,21 +75,71 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		monitoringTimeInterval = locationDefaultMonitoringTimeInterval
 	}
 
+	isEnableCloudStagingAreaJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, enableCloudStagingAreaJobType)
+	if err != nil {
+		return exec, err
+	}
+
+	if isEnableCloudStagingAreaJob {
+		exec = &job.EnableCloudAccessJobExecution{
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Operation:    operation,
+				},
+				ActionType:             job.EnableCloudAccessAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
+		}
+		return exec, exec.ResolveExecution(ctx)
+	}
+
+	isDisableCloudStagingAreaJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, disableCloudStagingAreaJobType)
+	if err != nil {
+		return exec, err
+	}
+
+	if isDisableCloudStagingAreaJob {
+		exec = &job.DisableCloudAccessJobExecution{
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Operation:    operation,
+				},
+				ActionType:             job.DisableCloudAccessAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
+		}
+		return exec, exec.ResolveExecution(ctx)
+	}
+
 	isDeleteCloudDataJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, deleteCloudDataJobType)
 	if err != nil {
 		return exec, err
 	}
 	if isDeleteCloudDataJob {
 		exec = &job.DeleteCloudDataExecution{
-			KV:                     kv,
-			Cfg:                    cfg,
-			DeploymentID:           deploymentID,
-			TaskID:                 taskID,
-			NodeName:               nodeName,
-			Operation:              operation,
-			MonitoringTimeInterval: monitoringTimeInterval,
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Operation:    operation,
+				},
+				ActionType:             job.CloudDataDeleteAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
 		}
-
 		return exec, exec.ResolveExecution(ctx)
 	}
 
@@ -94,13 +149,64 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	}
 	if isDDIToCloudJob {
 		exec = &job.DDIToCloudExecution{
-			KV:                     kv,
-			Cfg:                    cfg,
-			DeploymentID:           deploymentID,
-			TaskID:                 taskID,
-			NodeName:               nodeName,
-			Operation:              operation,
-			MonitoringTimeInterval: monitoringTimeInterval,
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Operation:    operation,
+				},
+				ActionType:             job.DataTransferAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
+		}
+
+		return exec, exec.ResolveExecution(ctx)
+	}
+
+	isCloudToDDIJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, cloudToDDIJobType)
+	if err != nil {
+		return exec, err
+	}
+	if isCloudToDDIJob {
+		exec = &job.CloudToDDIJobExecution{
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Operation:    operation,
+				},
+				ActionType:             job.DataTransferAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
+		}
+
+		return exec, exec.ResolveExecution(ctx)
+	}
+
+	isDDIToHPCJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, ddiToHPCJobType)
+	if err != nil {
+		return exec, err
+	}
+	if isDDIToHPCJob {
+		exec = &job.DDIToHPCExecution{
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Operation:    operation,
+				},
+				ActionType:             job.DataTransferAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
 		}
 
 		return exec, exec.ResolveExecution(ctx)

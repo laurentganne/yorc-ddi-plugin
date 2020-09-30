@@ -29,21 +29,20 @@ import (
 )
 
 const (
+	// EnableCloudAccessAction is the action of enabling the access to cloud staging area
+	EnableCloudAccessAction = "enable-cloud-access"
+	// DisableCloudAccessAction is the action of enabling the access to cloud staging area
+	DisableCloudAccessAction = "disable-cloud-access"
 	// DataTransferAction is the action of transferring a dataset
 	DataTransferAction = "transfer-request-monitoring"
 	// CloudDataDeleteAction is the action of deleting a dataset from Cloud storage
-	CloudDataDeleteAction     = "cloud-data-delete-monitoring"
-	actionDataSessionID       = "sessionID"
-	requestStatusPending      = "PENDING"
-	requestStatusRunning      = "RUNNING"
-	requestStatusCompleted    = "COMPLETED"
-	requestStatusFailed       = "FAILED"
-	requestStatusCanceled     = "CANCELED"
-	actionDataOffsetKeyFormat = "%d_%d_%d"
-	taskFailurePrefix         = "Task Failed, reason: "
+	CloudDataDeleteAction  = "cloud-data-delete-monitoring"
+	requestStatusPending   = "PENDING"
+	requestStatusRunning   = "RUNNING"
+	requestStatusCompleted = "COMPLETED"
+	requestStatusFailed    = "FAILED"
+	taskFailurePrefix      = "Task Failed, reason: "
 )
-
-type fileType int
 
 // ActionOperator holds function allowing to execute an action
 type ActionOperator struct {
@@ -60,7 +59,8 @@ type actionData struct {
 func (o *ActionOperator) ExecAction(ctx context.Context, cfg config.Configuration, taskID, deploymentID string, action *prov.Action) (bool, error) {
 	log.Debugf("Execute Action with ID:%q, taskID:%q, deploymentID:%q", action.ID, taskID, deploymentID)
 
-	if action.ActionType == DataTransferAction || action.ActionType == CloudDataDeleteAction {
+	if action.ActionType == DataTransferAction || action.ActionType == CloudDataDeleteAction ||
+		action.ActionType == EnableCloudAccessAction || action.ActionType == DisableCloudAccessAction {
 		deregister, err := o.monitorJob(ctx, cfg, deploymentID, action)
 		if err != nil {
 			// action scheduling needs to be unregistered
@@ -107,9 +107,20 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 	}
 
 	var status string
+	var targetPath string
 	switch action.ActionType {
+	case EnableCloudAccessAction:
+		status, err = ddiClient.GetEnableCloudAccessRequestStatus(actionData.token, actionData.requestID)
+	case DisableCloudAccessAction:
+		status, err = ddiClient.GetDisableCloudAccessRequestStatus(actionData.token, actionData.requestID)
 	case DataTransferAction:
-		status, err = ddiClient.GetDataTransferRequestStatus(actionData.token, actionData.requestID)
+		// TODO: implement DDI to HPC
+		if actionData.requestID == "DDIToHPCTempRequestID" {
+			status = "Transfer completed"
+			targetPath = "/path/to/hpc"
+		} else {
+			status, targetPath, err = ddiClient.GetDataTransferRequestStatus(actionData.token, actionData.requestID)
+		}
 		// Nothing to do here
 	case CloudDataDeleteAction:
 		status, err = ddiClient.GetDeletionRequestStatus(actionData.token, actionData.requestID)
@@ -131,23 +142,43 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 		requestStatus = requestStatusCompleted
 	case status == "Data deleted":
 		requestStatus = requestStatusCompleted
+	case status == "cloud nfs export added":
+		requestStatus = requestStatusCompleted
+	case status == "cloud nfs export deleted":
+		requestStatus = requestStatusCompleted
 	case strings.HasPrefix(status, taskFailurePrefix):
-		status = requestStatusFailed
+		requestStatus = requestStatusFailed
 		errorMessage = status[(len(taskFailurePrefix) - 1):]
 	default:
-		return true, errors.Errorf("Unexpexted :%q", action.ActionType)
+		return true, errors.Errorf("Unexpected status :%q", status)
 	}
 
 	previousRequestStatus, err := deployments.GetInstanceStateString(ctx, deploymentID, actionData.nodeName, "0")
 	if err != nil {
-		return true, errors.Wrapf(err, "failed to get instance state for request %d", actionData.requestID)
+		return true, errors.Wrapf(err, "failed to get instance state for request %s", actionData.requestID)
 	}
 
 	// See if monitoring must be continued and set job state if terminated
 	switch requestStatus {
 	case requestStatusCompleted:
+		// Store the target path in case of a transfer request
+		if targetPath != "" {
+			err = deployments.SetAttributeForAllInstances(ctx, deploymentID, actionData.nodeName,
+				destinationDatasetPathConsulAttribute, targetPath)
+			if err != nil {
+				return false, errors.Wrapf(err, "Failed to store DDI dataset path attribute value %s", targetPath)
+			}
+
+			err = deployments.SetCapabilityAttributeForAllInstances(ctx, deploymentID, actionData.nodeName,
+				dataTransferCapability, destinationDatasetPathConsulAttribute, targetPath)
+			if err != nil {
+				return false, errors.Wrapf(err, "Failed to store DDI dataset path capability attribute value %s", targetPath)
+			}
+		}
+
 		// job has been done successfully : unregister monitoring
 		deregister = true
+
 	case requestStatusPending, requestStatusRunning:
 		// job's still running or its state is about to be set definitively: monitoring is keeping on (deregister stays false)
 	default:

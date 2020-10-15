@@ -2,11 +2,11 @@ tosca_definitions_version: yorc_tosca_simple_yaml_1_0
 
 metadata:
   template_name: ddi-types
-  template_version: 0.1.1
+  template_version: 0.1.2
   template_author: yorc
 
 imports:
-  - heappe-types:0.1.1
+  - heappe-types:1.0.2
   - <yorc-types.yml>
 
 artifact_types:

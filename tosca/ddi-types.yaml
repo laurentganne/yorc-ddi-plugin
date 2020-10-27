@@ -182,16 +182,8 @@ node_types:
         description: Access token
         type: string
         required: true
-      metadata:
-        description: Dataset metadata
-        type: org.ddi.types.Metadata
-        required: false
       ddi_dataset_path:
         description: Path of the DDI dataset to transfer to the Cloud staging area
-        type: string
-        required: true
-      cloud_staging_area_directory_path:
-        description: Path where to transfer the dataset in Cloud staging area
         type: string
         required: true
     attributes:
@@ -201,10 +193,15 @@ node_types:
           ID of the DDI request created
       destination_directory_path:
         type: string
-        description: Path to the dataset transferred in Cloud staging are
+        description: Path to the dataset transferred in Cloud staging area
     capabilities:
       data_transfer:
         type: org.ddi.capabilities.DataTransfer
+    requirements:
+      - cloud_area_directory_provider:
+          capability: org.ddi.capabilities.CloudAreaDirectoryProvider
+          relationship: org.ddi.relationships.CloudAreaDirectoryProvider
+          occurrences: [1, 1]
     interfaces:
       Standard:
         create:
@@ -221,7 +218,7 @@ node_types:
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
-            CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_property: [SELF, cloud_staging_area_directory_path] }
+            CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_directory_provider, staging_area_directory_path] }
           implementation:
             file: "embedded"
             type: org.ddi.artifacts.Deployment
@@ -263,12 +260,12 @@ node_types:
         type: string
         description: Path to the dataset transferred in DDI
     capabilities:
-      cloud_to_ddi:
-        type: org.ddi.capabilities.CloudToDDI
+      data_transfer:
+        type: org.ddi.capabilities.DataTransfer
     requirements:
-      - dataset_provider:
-          capability: org.ddi.capabilities.CloudAreaDatasetProvider
-          relationship: org.ddi.relationships.DatasetProvider
+      - cloud_area_directory_provider:
+          capability: org.ddi.capabilities.CloudAreaDirectoryProvider
+          relationship: org.ddi.relationships.CloudAreaDirectoryProvider
           occurrences: [1, 1]
     interfaces:
       Standard:
@@ -286,7 +283,7 @@ node_types:
         submit:
           inputs:
             DDI_PATH: { get_property: [SELF, ddi_path] }
-            CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, dataset_provider, staging_area_directory_path] }
+            CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_directory_provider, staging_area_directory_path] }
           implementation:
             file: "embedded"
             type: org.ddi.artifacts.Deployment
@@ -321,9 +318,9 @@ node_types:
       cloud_delete:
         type: org.ddi.capabilities.DeleteCloudData
     requirements:
-      - dataset_provider:
-          capability: org.ddi.capabilities.CloudAreaDatasetProvider
-          relationship: org.ddi.relationships.DatasetProvider
+      - cloud_area_directory_provider:
+          capability: org.ddi.capabilities.CloudAreaDirectoryProvider
+          relationship: org.ddi.relationships.CloudAreaDirectoryProvider
           occurrences: [1, 1]
     interfaces:
       Standard:
@@ -340,7 +337,7 @@ node_types:
           TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
-            CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, dataset_provider, staging_area_directory_path] }
+            CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_directory_provider, staging_area_directory_path] }
           implementation:
             file: "embedded"
             type: org.ddi.artifacts.Deployment
@@ -457,7 +454,7 @@ capability_types:
     description: >
       A capability fulfilling requirements of a node requiring to be
       associated with a DeleteCloudData Job.
-  org.ddi.capabilities.CloudAreaDatasetProvider:
+  org.ddi.capabilities.CloudAreaDirectoryProvider:
     derived_from: tosca.capabilities.Root
     description: >
       A capability of a node providing a dataset in the Cloud Staging area
@@ -471,8 +468,8 @@ relationship_types:
     description: >
       Source must must be on same site as target
     valid_target_types: [ tosca.capabilities.OperatingSystem ]
-  org.ddi.relationships.DatasetProvider:
+  org.ddi.relationships.CloudAreaDirectoryProvider:
     derived_from: tosca.relationships.DependsOn
     description: >
       Relationship with a provider of dataset
-    valid_target_types: [ org.ddi.capabilities.CloudAreaDatasetProvider ]
+    valid_target_types: [ org.ddi.capabilities.CloudAreaDirectoryProvider ]

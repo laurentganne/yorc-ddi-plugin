@@ -457,11 +457,17 @@ capability_types:
   org.ddi.capabilities.CloudAreaDirectoryProvider:
     derived_from: tosca.capabilities.Root
     description: >
-      A capability of a node providing a dataset in the Cloud Staging area
+      A capability of a node providing a directory in the Cloud Staging area mounted on a host
     attributes:
       staging_area_directory_path:
         type: string
-        description: Path of the dataset in Cloud staging area
+        description: Path of the directory in Cloud staging area
+      directory_absolute_path:
+        type: string
+        description: Absolute path of the directory in Cloud staging area mounted on a host
+      user_name:
+        type: string
+        description: Name of a user having access to files in this directory
 relationship_types:
   org.ddi.relationships.SameSite:
     derived_from: tosca.relationships.DependsOn

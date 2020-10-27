@@ -480,7 +480,7 @@ capability_types:
       directory_absolute_path:
         type: string
         description: Absolute path of the directory in Cloud staging area mounted on a host
-        user_name:
+      user_name:
         type: string
         description: Name of a user having access to files in this directory
 relationship_types:

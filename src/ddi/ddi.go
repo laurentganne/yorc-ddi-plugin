@@ -24,6 +24,24 @@ import (
 )
 
 const (
+	// TaskStatusPendingMsg is the message returned when a task is pending
+	TaskStatusPendingMsg = "Task still in the queue, or task does not exist"
+	// TaskStatusInProgressMsg is the message returned when a task is in progress
+	TaskStatusInProgressMsg = "In progress"
+	// TaskStatusTransferCompletedMsg is the message returned when a ytansfer is completed
+	TaskStatusTransferCompletedMsg = "Transfer completed"
+	// TaskStatusDataDeletedMsg is the message returned when data is deleted
+	TaskStatusDataDeletedMsg = "Data deleted"
+	// TaskStatusCloudAccessEnabledMsg is the message returned when the access to cloud staging area is enabled
+	TaskStatusCloudAccessEnabledMsg = "cloud nfs export added"
+	// TaskStatusDisabledMsg is the message returned when the access to cloud staging area is enabled
+	TaskStatusDisabledMsg = "cloud nfs export deleted"
+	// TaskStatusFailureMsgPrefix is the the prefix used in task failure messages
+	TaskStatusFailureMsgPrefix = "Task Failed, reason: "
+	// TaskStatusMsgSuffixAlreadyEnabled is the the prefix used in task failing because the cloud access is already enabled
+	TaskStatusMsgSuffixAlreadyEnabled = "IP export is already active"
+	// TaskStatusMsgSuffixAlreadyDisabled is the the prefix used in task failing because the cloud access is already disabled
+	TaskStatusMsgSuffixAlreadyDisabled                   = "IP not found"
 	enableCloudAccessREST                                = "/cloud/add"
 	disableCloudAccessREST                               = "/cloud/remove"
 	ddiStagingStageREST                                  = "/stage"

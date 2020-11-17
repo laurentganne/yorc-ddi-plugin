@@ -16,6 +16,7 @@ package job
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -87,6 +88,11 @@ func (e *CloudToDDIJobExecution) submitDataTransferRequest(ctx context.Context) 
 	sourcePath := e.getValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
 	if sourcePath == "" {
 		return errors.Errorf("Failed to get path of dataset to transfer from Cloud staging area")
+	}
+
+	sourceSubDirPath := e.getValueFromEnvInputs(sourceSubDirEnvVar)
+	if sourceSubDirPath != "" {
+		sourcePath = filepath.Join(sourcePath, sourceSubDirPath)
 	}
 
 	destPath := e.getValueFromEnvInputs(ddiPathEnvVar)

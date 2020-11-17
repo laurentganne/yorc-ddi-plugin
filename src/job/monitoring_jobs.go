@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/laurentganne/yorc-ddi-plugin/v1/ddi"
+
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/config"
@@ -41,7 +43,6 @@ const (
 	requestStatusRunning   = "RUNNING"
 	requestStatusCompleted = "COMPLETED"
 	requestStatusFailed    = "FAILED"
-	taskFailurePrefix      = "Task Failed, reason: "
 )
 
 // ActionOperator holds function allowing to execute an action
@@ -134,21 +135,27 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 	var requestStatus string
 	var errorMessage string
 	switch {
-	case status == "Task still in the queue, or task does not exist":
+	case status == ddi.TaskStatusPendingMsg:
 		requestStatus = requestStatusPending
-	case status == "In progress":
+	case status == ddi.TaskStatusInProgressMsg:
 		requestStatus = requestStatusRunning
-	case status == "Transfer completed":
+	case status == ddi.TaskStatusTransferCompletedMsg:
 		requestStatus = requestStatusCompleted
-	case status == "Data deleted":
+	case status == ddi.TaskStatusDataDeletedMsg:
 		requestStatus = requestStatusCompleted
-	case status == "cloud nfs export added":
+	case status == ddi.TaskStatusCloudAccessEnabledMsg:
 		requestStatus = requestStatusCompleted
-	case status == "cloud nfs export deleted":
+	case status == ddi.TaskStatusDisabledMsg:
 		requestStatus = requestStatusCompleted
-	case strings.HasPrefix(status, taskFailurePrefix):
-		requestStatus = requestStatusFailed
-		errorMessage = status[(len(taskFailurePrefix) - 1):]
+	case strings.HasPrefix(status, ddi.TaskStatusFailureMsgPrefix):
+		if strings.HasSuffix(status, ddi.TaskStatusMsgSuffixAlreadyEnabled) {
+			requestStatus = requestStatusCompleted
+		} else if strings.HasSuffix(status, ddi.TaskStatusMsgSuffixAlreadyDisabled) {
+			requestStatus = requestStatusCompleted
+		} else {
+			requestStatus = requestStatusFailed
+			errorMessage = status[(len(ddi.TaskStatusFailureMsgPrefix) - 1):]
+		}
 	default:
 		return true, errors.Errorf("Unexpected status :%q", status)
 	}
@@ -186,7 +193,7 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 		deregister = true
 		// Log event containing all the slurm information
 
-		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelERROR, deploymentID).RegisterAsString(fmt.Sprintf("request status: %+v", requestStatus))
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelERROR, deploymentID).RegisterAsString(fmt.Sprintf("request %s status: %s, reason: %s", actionData.requestID, requestStatus, errorMessage))
 		// Error to be returned
 		err = errors.Errorf("Request ID %s finished unsuccessfully with status: %s, reason: %s", actionData.requestID, requestStatus, errorMessage)
 	}

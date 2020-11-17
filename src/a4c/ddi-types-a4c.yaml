@@ -262,6 +262,10 @@ node_types:
         description: Dataset metadata
         type: org.ddi.types.Metadata
         required: false
+      source_subdirectory:
+        description: Subdirectoy to copy (appended to the path provided by the cloud area provider path provided in requirements)
+        type: string
+        required: false
       ddi_path:
         description: Path where to transfer the dataset in DDI
         type: string
@@ -297,6 +301,7 @@ node_types:
           TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
+            SOURCE_SUBDIRECTORY:  { get_property: [SELF, source_subdirectory] }
             DDI_PATH: { get_property: [SELF, ddi_path] }
             CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_directory_provider, staging_area_directory_path] }
           implementation:
@@ -443,7 +448,7 @@ capability_types:
     attributes:
       destination_directory_path:
         type: string
-        description: Path to the dataset transferred in Cloud staging area
+        description: Path to the dataset transferred
   org.ddi.capabilities.CloudStagingAreaAccess:
     derived_from: tosca.capabilities.Root
     description: >

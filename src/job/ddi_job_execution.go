@@ -43,6 +43,7 @@ const (
 	tokenEnvVar                           = "TOKEN"
 	ddiDatasetPathEnvVar                  = "DDI_DATASET_PATH"
 	ddiPathEnvVar                         = "DDI_PATH"
+	sourceSubDirEnvVar                    = "SOURCE_SUBDIRECTORY"
 	cloudStagingAreaDatasetPathEnvVar     = "CLOUD_STAGING_AREA_DIRECTORY_PATH"
 	hpcDirectoryPathEnvVar                = "HPC_DIRECTORY_PATH"
 	ipAddressEnvVar                       = "IP_ADDRESS"

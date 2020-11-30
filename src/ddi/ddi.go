@@ -46,7 +46,8 @@ const (
 	disableCloudAccessREST                               = "/cloud/remove"
 	ddiStagingStageREST                                  = "/stage"
 	ddiStagingDeleteREST                                 = "/delete"
-	locationURLPropertyName                              = "url"
+	locationStagingURLPropertyName                       = "staging_url"
+	locationSSHFSURLPropertyName                         = "sshfs_url"
 	locationDDIAreaPropertyName                          = "ddi_area"
 	locationHPCStagingAreaNamePropertyName               = "hpc_staging_area_name"
 	locationCloudStagingAreaNamePropertyName             = "cloud_staging_area_name"
@@ -71,14 +72,20 @@ type Client interface {
 	GetDataTransferRequestStatus(token, requestID string) (string, string, error)
 	GetDeletionRequestStatus(token, requestID string) (string, error)
 	GetCloudStagingAreaProperties() LocationCloudStagingArea
+	GetStagingURL() string
+	GetSshfsURL() string
 }
 
 // GetClient returns a DDI client for a given location
 func GetClient(locationProps config.DynamicMap) (Client, error) {
 
-	url := locationProps.GetString(locationURLPropertyName)
+	url := locationProps.GetString(locationStagingURLPropertyName)
 	if url == "" {
-		return nil, errors.Errorf("No %s property defined in DDI location configuration", locationURLPropertyName)
+		return nil, errors.Errorf("No %s property defined in DDI location configuration", locationStagingURLPropertyName)
+	}
+	sshfsURL := locationProps.GetString(locationSSHFSURLPropertyName)
+	if sshfsURL == "" {
+		return nil, errors.Errorf("No %s property defined in DDI location configuration", locationSSHFSURLPropertyName)
 	}
 	ddiArea := locationProps.GetString(locationDDIAreaPropertyName)
 	if ddiArea == "" {
@@ -99,6 +106,8 @@ func GetClient(locationProps config.DynamicMap) (Client, error) {
 		hpcStagingArea:   hpcStagingArea,
 		cloudStagingArea: cloudStagingArea,
 		httpClient:       getHTTPClient(url),
+		StagingURL:       url,
+		SshfsURL:         sshfsURL,
 	}, nil
 }
 
@@ -107,6 +116,8 @@ type ddiClient struct {
 	hpcStagingArea   LocationHPCStagingArea
 	cloudStagingArea LocationCloudStagingArea
 	httpClient       *httpclient
+	StagingURL       string
+	SshfsURL         string
 }
 
 // SubmitEnableCloudAccess submits a request to enable the access to the Cloud
@@ -277,4 +288,16 @@ func (d *ddiClient) GetDeletionRequestStatus(token, requestID string) (string, e
 func (d *ddiClient) GetCloudStagingAreaProperties() LocationCloudStagingArea {
 
 	return d.cloudStagingArea
+}
+
+// GetURL returns the DDI API URL
+func (d *ddiClient) GetStagingURL() string {
+
+	return d.StagingURL
+}
+
+// GetSshfsURL returns the DDI API SSHFS URL
+func (d *ddiClient) GetSshfsURL() string {
+
+	return d.SshfsURL
 }

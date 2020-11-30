@@ -16,7 +16,10 @@ package job
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -89,8 +92,10 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 	}
 
 	destPath := e.getValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
-	if destPath == "" {
-		return errors.Errorf("Failed to get path of desired transferred dataset in Cloud staging area")
+	timeStampStr := e.getValueFromEnvInputs(timestampCloudStagingAreaDirEnvVar)
+	addTimestamp, _ := strconv.ParseBool(timeStampStr)
+	if addTimestamp {
+		destPath = fmt.Sprintf("%s_%d", destPath, time.Now().UnixNano()/1000000)
 	}
 
 	metadata, err := e.getMetadata(ctx)

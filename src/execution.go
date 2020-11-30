@@ -22,6 +22,7 @@ import (
 
 	"github.com/laurentganne/yorc-ddi-plugin/v1/common"
 	"github.com/laurentganne/yorc-ddi-plugin/v1/job"
+	"github.com/laurentganne/yorc-ddi-plugin/v1/standard"
 
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
@@ -33,6 +34,7 @@ const (
 	ddiInfrastructureType                 = "ddi"
 	locationJobMonitoringTimeInterval     = "job_monitoring_time_interval"
 	locationDefaultMonitoringTimeInterval = 5 * time.Second
+	ddiAccessComponentType                = "org.ddi.nodes.DDIAccess"
 	enableCloudStagingAreaJobType         = "org.ddi.nodes.EnableCloudStagingAreaAccessJob"
 	disableCloudStagingAreaJobType        = "org.ddi.nodes.DisableCloudStagingAreaAccessJob"
 	ddiToCloudJobType                     = "org.ddi.nodes.DDIToCloudJob"
@@ -73,6 +75,25 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	if monitoringTimeInterval <= 0 {
 		// Default value
 		monitoringTimeInterval = locationDefaultMonitoringTimeInterval
+	}
+
+	isDDIAccessComponent, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, ddiAccessComponentType)
+	if err != nil {
+		return exec, err
+	}
+
+	if isDDIAccessComponent {
+		exec = &standard.DDIAccessExecution{
+			DDIExecution: &common.DDIExecution{
+				KV:           kv,
+				Cfg:          cfg,
+				DeploymentID: deploymentID,
+				TaskID:       taskID,
+				NodeName:     nodeName,
+				Operation:    operation,
+			},
+		}
+		return exec, exec.ResolveExecution(ctx)
 	}
 
 	isEnableCloudStagingAreaJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, enableCloudStagingAreaJobType)

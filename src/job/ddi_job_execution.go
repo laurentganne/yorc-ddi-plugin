@@ -45,6 +45,7 @@ const (
 	ddiPathEnvVar                         = "DDI_PATH"
 	sourceSubDirEnvVar                    = "SOURCE_SUBDIRECTORY"
 	cloudStagingAreaDatasetPathEnvVar     = "CLOUD_STAGING_AREA_DIRECTORY_PATH"
+	timestampCloudStagingAreaDirEnvVar    = "TIMESTAMP_CLOUD_STAGING_AREA_DIRECTORY"
 	hpcDirectoryPathEnvVar                = "HPC_DIRECTORY_PATH"
 	ipAddressEnvVar                       = "IP_ADDRESS"
 	dataTransferCapability                = "data_transfer"

@@ -186,6 +186,17 @@ node_types:
         description: Path of the DDI dataset to transfer to the Cloud staging area
         type: string
         required: true
+      cloud_staging_area_directory_path:
+        type: string
+        description: >
+          Relative directory path in cloud staging area where to copy the dataset.
+        required: false
+        default: ""
+      timestamp_cloud_staging_area_directory:
+        type: boolean
+        description: Add a tiemstamp to cloud_staging_area_directory_path
+        default: false
+        required: false
     attributes:
       request_id:
         type: string
@@ -196,12 +207,7 @@ node_types:
         description: Path to the dataset transferred in Cloud staging area
     capabilities:
       data_transfer:
-        type: org.ddi.capabilities.DataTransfer
-    requirements:
-      - cloud_area_directory_provider:
-          capability: org.ddi.capabilities.CloudAreaDirectoryProvider
-          relationship: org.ddi.relationships.CloudAreaDirectoryProvider
-          occurrences: [1, 1]
+        type: org.ddi.capabilities.DataTransferCloud
     interfaces:
       Standard:
         create:
@@ -265,7 +271,7 @@ node_types:
         description: Path to the dataset transferred in DDI
     capabilities:
       data_transfer:
-        type: org.ddi.capabilities.DataTransfer
+        type: org.ddi.capabilities.DataTransferDDI
     requirements:
       - cloud_area_directory_provider:
           capability: org.ddi.capabilities.CloudAreaDirectoryProvider
@@ -386,7 +392,7 @@ node_types:
         description: Path to the dataset transferred in DDI    
     capabilities:
       data_transfer:
-        type: org.ddi.capabilities.DataTransfer
+        type: org.ddi.capabilities.DataTransferHPC
     requirements:
       - job:
           capability: org.heappe.capabilities.HeappeJob
@@ -425,11 +431,66 @@ node_types:
     derived_from: org.ddi.nodes.pub.DDIToHPCJob
     description: >
       Transfer datasets from DDI to HPC
+  org.ddi.nodes.DDIAccess:
+    derived_from: tosca.nodes.Root
+    description: >
+      Provides access to the DDI API
+    attributes:
+      staging_url:
+        type: string
+        description: >
+          DDI API staging URL on the local site
+      sshfs_url:
+        type: string
+        description: >
+          DDI API SSHFS export URL on the local site
+    capabilities:
+      ddi_access:
+        type: org.ddi.capabilities.DDIAccess
+    requirements:
+      - os:
+          capability: tosca.capabilities.OperatingSystem
+          node: tosca.nodes.Compute
+          relationship: org.ddi.relationships.SameSite
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        start:
+          implementation:
+            file: "embedded"
+            type: org.ddi.artifacts.Deployment
 capability_types:
-  org.ddi.capabilities.DataTransfer:
+  org.ddi.capabilities.DDIAccess:
     derived_from: tosca.capabilities.Root
     description: >
-      A capability provided by a DDI Job performing data transfers.
+      A capability providing details on the access to DDI
+    attributes:
+      staging_url:
+        type: string
+        description: DDI API staging URL
+      sshfs_url:
+        type: string
+        description: DDI API SSHFS export URL
+  org.ddi.capabilities.DataTransferCloud:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability provided by a DDI Job performing a data transfer to the cloud staging area
+    attributes:
+      destination_directory_path:
+        type: string
+        description: Path to the dataset transferred
+  org.ddi.capabilities.DataTransferHPC:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability provided by a DDI Job performing a data transfer to the HPC
+    attributes:
+      destination_directory_path:
+        type: string
+        description: Path to the dataset transferred
+  org.ddi.capabilities.DataTransferDDI:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability provided by a DDI Job performing a data transfer to DDI
     attributes:
       destination_directory_path:
         type: string
@@ -484,3 +545,13 @@ relationship_types:
     description: >
       Relationship with a provider of dataset
     valid_target_types: [ org.ddi.capabilities.CloudAreaDirectoryProvider ]
+  org.ddi.relationships.DDIAccessProvider:
+    derived_from: tosca.relationships.DependsOn
+    description: >
+      Relationship with a provider of DDI access
+    valid_target_types: [ org.ddi.capabilities.DDIAccess ]
+  org.ddi.relationships.CloudAreaDatasetProvider:
+    derived_from: tosca.relationships.DependsOn
+    description: >
+      Relationship with a provider of dataset in cloud staging area
+    valid_target_types: [ org.ddi.capabilities.DataTransferCloud ]

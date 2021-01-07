@@ -115,14 +115,7 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 	case DisableCloudAccessAction:
 		status, err = ddiClient.GetDisableCloudAccessRequestStatus(actionData.token, actionData.requestID)
 	case DataTransferAction:
-		// TODO: implement DDI to HPC
-		if actionData.requestID == "DDIToHPCTempRequestID" {
-			status = "Transfer completed"
-			targetPath = "/path/to/hpc"
-		} else {
-			status, targetPath, err = ddiClient.GetDataTransferRequestStatus(actionData.token, actionData.requestID)
-		}
-		// Nothing to do here
+		status, targetPath, err = ddiClient.GetDataTransferRequestStatus(actionData.token, actionData.requestID)
 	case CloudDataDeleteAction:
 		status, err = ddiClient.GetDeletionRequestStatus(actionData.token, actionData.requestID)
 	default:

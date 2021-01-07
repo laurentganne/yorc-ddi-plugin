@@ -40,6 +40,7 @@ const (
 	metadataProperty                      = "metadata"
 	requestIDConsulAttribute              = "request_id"
 	destinationDatasetPathConsulAttribute = "destination_directory_path"
+	stagingAreaPathConsulAttribute        = "staging_area_directory_path"
 	tokenEnvVar                           = "TOKEN"
 	ddiDatasetPathEnvVar                  = "DDI_DATASET_PATH"
 	ddiPathEnvVar                         = "DDI_PATH"
@@ -47,6 +48,10 @@ const (
 	cloudStagingAreaDatasetPathEnvVar     = "CLOUD_STAGING_AREA_DIRECTORY_PATH"
 	timestampCloudStagingAreaDirEnvVar    = "TIMESTAMP_CLOUD_STAGING_AREA_DIRECTORY"
 	hpcDirectoryPathEnvVar                = "HPC_DIRECTORY_PATH"
+	hpcServerEnvVar                       = "HPC_SERVER"
+	heappeJobIDEnvVar                     = "HEAPPE_JOB_ID"
+	tasksNameIdEnvVar                     = "TASKS_NAME_ID"
+	taskNameEnvVar                        = "TASK_NAME"
 	ipAddressEnvVar                       = "IP_ADDRESS"
 	dataTransferCapability                = "data_transfer"
 )

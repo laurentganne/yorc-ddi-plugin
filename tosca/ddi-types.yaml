@@ -205,6 +205,9 @@ node_types:
       destination_directory_path:
         type: string
         description: Path to the dataset transferred in Cloud staging area
+      staging_area_directory_path:
+        type: string
+        description: Path of the dataset in Cloud staging area
     capabilities:
       data_transfer:
         type: org.ddi.capabilities.DataTransferCloud
@@ -329,9 +332,9 @@ node_types:
       cloud_delete:
         type: org.ddi.capabilities.DeleteCloudData
     requirements:
-      - cloud_area_directory_provider:
-          capability: org.ddi.capabilities.CloudAreaDirectoryProvider
-          relationship: org.ddi.relationships.CloudAreaDirectoryProvider
+      - cloud_area_dataset_provider:
+          capability: org.ddi.capabilities.DataTransferCloud
+          relationship: org.ddi.relationships.CloudAreaDatasetProvider
           occurrences: [1, 1]
     interfaces:
       Standard:
@@ -348,7 +351,7 @@ node_types:
           TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
-            CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_directory_provider, staging_area_directory_path] }
+            CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_dataset_provider, staging_area_directory_path] }
           implementation:
             file: "embedded"
             type: org.ddi.artifacts.Deployment
@@ -364,11 +367,11 @@ node_types:
     derived_from: org.ddi.nodes.pub.DeleteCloudDataJob
     description: >
       Delete a dataset from Cloud staging area
-  org.ddi.nodes.pub.DDIToHPCJob:
+  org.ddi.nodes.pub.DDIToHPCTaskJob:
     derived_from: tosca.nodes.Root
     abstract: true
     description: >
-      Transfer datasets from DDI to HPC staging area (abstract)
+      Transfer datasets from DDI to HPC staging area for a given task in the job (abstract)
     properties:
       token:
         description: Access token
@@ -382,6 +385,10 @@ node_types:
         description: Path of the DDI dataset to transfer to HPC
         type: string
         required: true
+      task_name:
+        description: Name of the task in the Job
+        type: string
+        required: true
     attributes:
       request_id:
         type: string
@@ -389,7 +396,7 @@ node_types:
           ID of the DDI request created
       destination_directory_path:
         type: string
-        description: Path to the dataset transferred in DDI    
+        description: Path to the dataset transferred in HPC infrastructure
     capabilities:
       data_transfer:
         type: org.ddi.capabilities.DataTransferHPC
@@ -416,6 +423,10 @@ node_types:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
             HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
+            HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
+            HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
+            TASK_NAME: {get_property: [SELF, task_name]}
           implementation:
             file: "embedded"
             type: org.ddi.artifacts.Deployment
@@ -427,10 +438,10 @@ node_types:
           implementation:
             file: "embedded"
             type: org.ddi.artifacts.Deployment
-  org.ddi.nodes.DDIToHPCJob:
-    derived_from: org.ddi.nodes.pub.DDIToHPCJob
+  org.ddi.nodes.DDIToHPCTaskJob:
+    derived_from: org.ddi.nodes.pub.DDIToHPCTaskJob
     description: >
-      Transfer datasets from DDI to HPC
+      Transfer datasets from DDI to HPC staging area for a given task in the job
   org.ddi.nodes.DDIAccess:
     derived_from: tosca.nodes.Root
     description: >
@@ -476,6 +487,9 @@ capability_types:
     description: >
       A capability provided by a DDI Job performing a data transfer to the cloud staging area
     attributes:
+      staging_area_directory_path:
+        type: string
+        description: Path of the dataset in Cloud staging area
       destination_directory_path:
         type: string
         description: Path to the dataset transferred

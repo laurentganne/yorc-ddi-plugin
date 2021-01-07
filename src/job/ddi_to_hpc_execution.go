@@ -16,6 +16,9 @@ package job
 
 import (
 	"context"
+	"encoding/json"
+	"path"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -93,12 +96,52 @@ func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error
 		return errors.Errorf("Failed to get HPC directory path")
 	}
 
+	serverFQDN := e.getValueFromEnvInputs(hpcServerEnvVar)
+	if destPath == "" {
+		return errors.Errorf("Failed to get HPC server")
+	}
+
+	res := strings.SplitN(serverFQDN, ".", 2)
+	targetSystem := res[0] + "_home"
+
+	heappeJobIDStr := e.getValueFromEnvInputs(heappeJobIDEnvVar)
+	if heappeJobIDStr == "" {
+		return errors.Errorf("Failed to get ID of associated job")
+	}
+	heappeJobID, err := strconv.ParseInt(heappeJobIDStr, 10, 64)
+	if err != nil {
+		err = errors.Wrapf(err, "Unexpected Job ID value %q for deployment %s node %s",
+			heappeJobIDStr, e.DeploymentID, e.NodeName)
+		return err
+	}
+
+	taskName := e.getValueFromEnvInputs(taskNameEnvVar)
+	if taskName == "" {
+		return errors.Errorf("Failed to get task name")
+	}
+
+	strVal := e.getValueFromEnvInputs(tasksNameIdEnvVar)
+	if strVal == "" {
+		return errors.Errorf("Failed to get map of tasks name-id from associated job")
+	}
+	var tasksNameID map[string]string
+	err = json.Unmarshal([]byte(strVal), &tasksNameID)
+	if err != nil {
+		return errors.Wrapf(err, "Failed to unmarshall map od task name - task id %s", strVal)
+	}
+
+	taskID, found := tasksNameID[taskName]
+	if !found {
+		return errors.Errorf("Failed to find task %s in associated job", taskName)
+	}
+	taskDirPath := path.Join(destPath, taskID)
+
 	metadata, err := e.getMetadata(ctx)
 	if err != nil {
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, token, sourcePath, destPath)
+	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, token, targetSystem, sourcePath, taskDirPath, heappeJobID)
 	if err != nil {
 		return err
 	}

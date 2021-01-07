@@ -17,6 +17,7 @@ package job
 import (
 	"context"
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -98,6 +99,9 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 		destPath = fmt.Sprintf("%s_%d", destPath, time.Now().UnixNano()/1000000)
 	}
 
+	// Add the dataset ID to destPath to get the dataset path in staging area
+	datasetCloudAreaPath := path.Join(destPath, path.Base(sourcePath))
+
 	metadata, err := e.getMetadata(ctx)
 	if err != nil {
 		return err
@@ -112,7 +116,20 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		requestIDConsulAttribute, requestID)
 	if err != nil {
-		err = errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
+		return errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
 	}
+
+	// Store the staging area directory path
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		stagingAreaPathConsulAttribute, datasetCloudAreaPath)
+	if err != nil {
+		return errors.Wrapf(err, "Request %s submitted, but failed to store the staging area directory path %s", requestID, destPath)
+	}
+	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		dataTransferCapability, stagingAreaPathConsulAttribute, datasetCloudAreaPath)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to store cloud staging area path capability attribute value %s", destPath)
+	}
+
 	return err
 }

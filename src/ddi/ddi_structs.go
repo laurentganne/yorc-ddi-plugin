@@ -51,6 +51,17 @@ type DataTransferRequest struct {
 	TargetPath   string   `json:"target_path"`
 }
 
+// DataTransferRequestHPCExectension holds additional parameters for data transfers on HPC
+type DataTransferRequestHPCExectension struct {
+	JobID int64 `json:"job_id"`
+}
+
+// HPCDataTransferRequest holds parameters of a data transfer request
+type HPCDataTransferRequest struct {
+	DataTransferRequest
+	DataTransferRequestHPCExectension
+}
+
 // DeleteDataRequest holds parameters of data to delete
 type DeleteDataRequest struct {
 	TargetSystem string `json:"target_system"`

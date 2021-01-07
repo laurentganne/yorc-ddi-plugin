@@ -38,7 +38,7 @@ const (
 	enableCloudStagingAreaJobType         = "org.ddi.nodes.EnableCloudStagingAreaAccessJob"
 	disableCloudStagingAreaJobType        = "org.ddi.nodes.DisableCloudStagingAreaAccessJob"
 	ddiToCloudJobType                     = "org.ddi.nodes.DDIToCloudJob"
-	ddiToHPCJobType                       = "org.ddi.nodes.DDIToHPCJob"
+	DDIToHPCTaskJobType                   = "org.ddi.nodes.DDIToHPCTaskJob"
 	cloudToDDIJobType                     = "org.ddi.nodes.CloudToDDIJob"
 	deleteCloudDataJobType                = "org.ddi.nodes.DeleteCloudDataJob"
 )
@@ -210,11 +210,11 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		return exec, exec.ResolveExecution(ctx)
 	}
 
-	isDDIToHPCJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, ddiToHPCJobType)
+	isDDIToHPCTaskJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, DDIToHPCTaskJobType)
 	if err != nil {
 		return exec, err
 	}
-	if isDDIToHPCJob {
+	if isDDIToHPCTaskJob {
 		exec = &job.DDIToHPCExecution{
 			DDIJobExecution: &job.DDIJobExecution{
 				DDIExecution: &common.DDIExecution{

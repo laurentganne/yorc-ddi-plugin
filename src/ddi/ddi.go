@@ -15,12 +15,14 @@
 package ddi
 
 import (
+	"encoding/json"
 	"net/http"
 	"path"
 
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/config"
+	"github.com/ystia/yorc/v4/log"
 )
 
 const (
@@ -67,7 +69,7 @@ type Client interface {
 	SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
 	SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error)
 	SubmitDDIDataDeletion(token, path string) (string, error)
-	SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, hpcDirectoryPath string) (string, error)
+	SubmitDDIToHPCDataTransfer(metadata Metadata, token, targetSystem, ddiSourcePath, hpcDirectoryPath string, jobID int64) (string, error)
 	SubmitCloudStagingAreaDataDeletion(token, path string) (string, error)
 	GetDataTransferRequestStatus(token, requestID string) (string, string, error)
 	GetDeletionRequestStatus(token, requestID string) (string, error)
@@ -251,10 +253,32 @@ func (d *ddiClient) SubmitCloudStagingAreaDataDeletion(token, path string) (stri
 }
 
 // SubmitDDIToHPCDataTransfer submits a data transfer request from DDI to HPC
-func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, hpcDirectoryPath string) (string, error) {
+func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, targetSystem, ddiSourcePath, hpcDirectoryPath string, jobID int64) (string, error) {
 
-	// TODO: implement DDI to HOC
-	return "DDIToHPCTempRequestID", nil
+	request := HPCDataTransferRequest{
+		DataTransferRequest{
+			Metadata:     metadata,
+			SourceSystem: d.ddiArea,
+			SourcePath:   ddiSourcePath,
+			TargetSystem: targetSystem,
+			TargetPath:   hpcDirectoryPath,
+		},
+		DataTransferRequestHPCExectension{
+			JobID: jobID,
+		},
+	}
+
+	requestStr, _ := json.Marshal(request)
+	log.Debugf("Subitting DDI request %s", string(requestStr))
+
+	var response SubmittedRequestInfo
+	err := d.httpClient.doRequest(http.MethodPost, ddiStagingStageREST,
+		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit DDI %s to HPC %s %s data transfer", ddiSourcePath, targetSystem, hpcDirectoryPath)
+	}
+
+	return response.RequestID, err
 }
 
 // GetDataTransferRequestStatus returns the status of a data transfer request

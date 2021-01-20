@@ -41,6 +41,7 @@ type DDIExecution struct {
 	DeploymentID   string
 	TaskID         string
 	NodeName       string
+	Token          string
 	Operation      prov.Operation
 	EnvInputs      []*operations.EnvInput
 	VarInputsNames []string

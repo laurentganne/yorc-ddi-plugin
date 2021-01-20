@@ -78,3 +78,31 @@ type RequestStatus struct {
 	Status     string `json:"status"`
 	TargetPath string `json:"target_path,omitempty"`
 }
+
+// DatasetLocation holds location properties of a dataset
+type DatasetLocation struct {
+	InternalID string `json:"internalID"`
+	Access     string `json:"access"`
+	Project    string `json:"project"`
+}
+
+// DatasetSearchResult holds properties of an element of a dataset search result
+type DatasetSearchResult struct {
+	Location DatasetLocation `json:"location"`
+	Metadata Metadata        `json:"metadata"`
+}
+
+// DatasetListingRequest holds properties of a request to list the content of a dataset
+type DatasetListingRequest struct {
+	InternalID string `json:"internalID"`
+	Access     string `json:"access"`
+	Project    string `json:"project"`
+	Recursive  bool   `json:"recursive"`
+}
+
+// DatasetListing holds the listing of a dataset content
+type DatasetListing struct {
+	Name     string            `json:"name"`
+	Type     string            `json:"type"`
+	Contents []*DatasetListing `json:"contents,omitempty"`
+}

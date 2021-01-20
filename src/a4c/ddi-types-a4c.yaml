@@ -2,13 +2,13 @@ tosca_definitions_version: alien_dsl_2_0_0
 
 metadata:
   template_name: ddi-types
-  template_version: 0.1.2
+  template_version: 0.1.3
   template_author: yorc
 
 imports:
   - tosca-normative-types:1.0.0-ALIEN20
   - yorc-types:1.1.0
-  - heappe-types:1.0.2
+  - heappe-types:1.0.3
 
 artifact_types:
   org.ddi.artifacts.Deployment:
@@ -216,12 +216,12 @@ node_types:
         type: string
         description: >
           ID of the DDI request created
-      destination_directory_path:
+      destination_path:
         type: string
-        description: Path to the dataset transferred in Cloud staging area
+        description: Path to the data transferred in Cloud staging area
       staging_area_directory_path:
         type: string
-        description: Path of the dataset in Cloud staging area
+        description: Path of the dataset directory in Cloud staging area
     capabilities:
       data_transfer:
         type: org.ddi.capabilities.DataTransferCloud
@@ -285,7 +285,7 @@ node_types:
         type: string
         description: >
           ID of the DDI request created
-      destination_directory_path:
+      destination_path:
         type: string
         description: Path to the dataset transferred in DDI
     capabilities:
@@ -410,9 +410,9 @@ node_types:
         type: string
         description: >
           ID of the DDI request created
-      destination_directory_path:
+      destination_path:
         type: string
-        description: Path to the dataset transferred in HPC infrastructure
+        description: Path to the data transferred in HPC infrastructure
     capabilities:
       data_transfer:
         type: org.ddi.capabilities.DataTransferHPC
@@ -486,6 +486,239 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
+  org.ddi.nodes.pub.WaitForDDIDatasetJob:
+    derived_from: tosca.nodes.Root
+    abstract: true
+    description: >
+      Wait for a dataset to appear in DDI, and optionally wait for files in this dataset (abstract)
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
+      metadata:
+        description: Dataset metadata
+        type: org.ddi.types.Metadata
+        required: true
+      needed_files_patterns:
+        type: list
+        entry_schema:
+          type: string
+        description: |
+          List of patterns of files that need to be available in dataset
+        required: false
+    attributes:
+      dataset_path:
+        type: string
+        description: Path to the dataset in DDI
+      dataset_id:
+        type: string
+        description: dataset identifier
+      dataset_file_paths:
+        type: list
+        description: |
+          Path of dataset files matching the patterns
+    capabilities:
+      dataset_files:
+        type: org.ddi.capabilities.DatasetFilesProvider
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        delete:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            METADATA: { get_property: [SELF, metadata] }
+            NEEDED_FILES_PATTERNS: { get_property: [SELF, needed_files_patterns] }
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        run:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        cancel:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+  org.ddi.nodes.WaitForDDIDatasetJob:
+    derived_from: org.ddi.nodes.pub.WaitForDDIDatasetJob
+    description: >
+      Wait for a dataset to appear in DDI, and optionally wait for files in this dataset
+  org.ddi.nodes.pub.DDIRuntimeToCloudJob:
+    derived_from: org.ddi.nodes.pub.Cloud
+    abstract: true
+    description: >
+      Transfer from DDI to Cloud staging area, a dataset (or one dataset file) selected at runtime (abstract)
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
+      file_pattern:
+        description: >
+          Pattern of the file to transfer.
+          Only one file matching this pattern in the list of files
+          returned by the dataset_files provider will be transferred.
+          If no pattern is provided here, the whole dataset will be transferred.
+        type: string
+        required: false
+      cloud_staging_area_directory_path:
+        type: string
+        description: >
+          Relative directory path in cloud staging area where to copy the data.
+        required: false
+        default: ""
+      timestamp_cloud_staging_area_directory:
+        type: boolean
+        description: Add a tiemstamp to cloud_staging_area_directory_path
+        default: false
+        required: false
+    attributes:
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
+      destination_path:
+        type: string
+        description: Path to the data transferred in Cloud staging area
+      staging_area_directory_path:
+        type: string
+        description: Path of the dataset directory in Cloud staging area
+    capabilities:
+      data_transfer:
+        type: org.ddi.capabilities.DataTransferCloud
+    requirements:
+      - dataset_files:
+          capability: org.ddi.capabilities.DatasetFilesProvider
+          node: org.ddi.nodes.pub.WaitForDDIDatasetJob
+          relationship: org.ddi.relationships.DatasetFilesProvider
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        delete:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            DDI_DATASET_PATH: { get_attribute: [REQ_TARGET, dataset_files, dataset_path] }
+            DDI_DATASET_FILE_PATHS: { get_attribute: [REQ_TARGET, dataset_files, dataset_file_paths] }
+            FILE_PATTERN: { get_property: [SELF, file_pattern] }
+            CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_property: [SELF, cloud_staging_area_directory_path] }
+            TIMESTAMP_CLOUD_STAGING_AREA_DIRECTORY: { get_property: [SELF, timestamp_cloud_staging_area_directory] }
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        run:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        cancel:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+  org.ddi.nodes.DDIRuntimeToCloudJob:
+    derived_from: org.ddi.nodes.pub.DDIRuntimeToCloudJob
+    description: >
+      Transfer from DDI to Cloud staging area, a dataset (or one dataset file) selected at runtime
+  org.ddi.nodes.pub.DDIRuntimeToHPCTaskJob:
+    derived_from: tosca.nodes.Root
+    abstract: true
+    description: >
+      Transfer from DDI to HPC staging area, a dataset (or one dataset file) selected at runtime (abstract)
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
+      task_name:
+        description: Name of the task in the Job
+        type: string
+        required: true
+      file_pattern:
+        description: >
+          Pattern of the file to transfer.
+          Only one file matching this pattern in the list of files
+          returned by the dataset_files provider will be transferred.
+          If no pattern is provided here, the whole dataset will be transferred.
+        type: string
+        required: false
+    attributes:
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
+      destination_path:
+        type: string
+        description: Path to the data transferred in HPC infrastructure
+    capabilities:
+      data_transfer:
+        type: org.ddi.capabilities.DataTransferHPC
+    requirements:
+      - job:
+          capability: org.heappe.capabilities.HeappeJob
+          node: org.heappe.nodes.Job
+          relationship: org.heappe.relationships.SendInputsToJob
+          occurrences: [1, 1]
+      - dataset_files:
+          capability: org.ddi.capabilities.DatasetFilesProvider
+          node: org.ddi.nodes.pub.WaitForDDIDatasetJob
+          relationship: org.ddi.relationships.DatasetFilesProvider
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        delete:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            DDI_DATASET_PATH: { get_attribute: [REQ_TARGET, dataset_files, dataset_path] }
+            DDI_DATASET_FILE_PATHS: { get_attribute: [REQ_TARGET, dataset_files, dataset_file_paths] }
+            HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
+            HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
+            HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
+            FILE_PATTERN: { get_property: [SELF, file_pattern] }
+            TASK_NAME: {get_property: [SELF, task_name]}
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        run:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        cancel:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+  org.ddi.nodes.DDIRuntimeToHPCTaskJob:
+    derived_from: org.ddi.nodes.pub.DDIRuntimeToHPCTaskJob
+    description: >
+      Transfer from DDI to HPC staging area, a dataset (or one dataset file) selected at runtime
 capability_types:
   org.ddi.capabilities.DDIAccess:
     derived_from: tosca.capabilities.Root
@@ -505,16 +738,16 @@ capability_types:
     attributes:
       staging_area_directory_path:
         type: string
-        description: Path of the dataset in Cloud staging area
-      destination_directory_path:
+        description: Path of the dataset directory in Cloud staging area
+      destination_path:
         type: string
-        description: Path to the dataset transferred
+        description: Path to the data transferred
   org.ddi.capabilities.DataTransferHPC:
     derived_from: tosca.capabilities.Root
     description: >
       A capability provided by a DDI Job performing a data transfer to the HPC
     attributes:
-      destination_directory_path:
+      destination_path:
         type: string
         description: Path to the dataset transferred
   org.ddi.capabilities.DataTransferDDI:
@@ -522,9 +755,24 @@ capability_types:
     description: >
       A capability provided by a DDI Job performing a data transfer to DDI
     attributes:
-      destination_directory_path:
+      destination_path:
         type: string
         description: Path to the dataset transferred
+  org.ddi.capabilities.DatasetFilesProvider:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability provided by a Job providing details of a dataset and files it contains
+    attributes:
+      dataset_path:
+        type: string
+        description: Path to the dataset in DDI
+      dataset_id:
+        type: string
+        description: dataset identifier
+      dataset_file_paths:
+        type: list
+        description: |
+          Path of dataset files matching the patterns
   org.ddi.capabilities.CloudStagingAreaAccess:
     derived_from: tosca.capabilities.Root
     description: >
@@ -585,3 +833,8 @@ relationship_types:
     description: >
       Relationship with a provider of dataset in cloud staging area
     valid_target_types: [ org.ddi.capabilities.DataTransferCloud ]
+  org.ddi.relationships.DatasetFilesProvider:
+    derived_from: tosca.relationships.DependsOn
+    description: >
+      Relationship with a provider of details on a dataset and its files in DDI
+    valid_target_types: [ org.ddi.capabilities.DatasetFilesProvider ]

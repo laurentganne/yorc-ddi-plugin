@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -28,13 +29,13 @@ import (
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// DDIToHPCExecution holds DDI to HPC data transfer job Execution properties
-type DDIToHPCExecution struct {
+// DDIRuntimeToHPCExecution holds DDI to HPC data transfer job Execution properties
+type DDIRuntimeToHPCExecution struct {
 	*DDIJobExecution
 }
 
 // Execute executes a synchronous operation
-func (e *DDIToHPCExecution) Execute(ctx context.Context) error {
+func (e *DDIRuntimeToHPCExecution) Execute(ctx context.Context) error {
 
 	var err error
 	switch strings.ToLower(e.Operation.Name) {
@@ -75,16 +76,63 @@ func (e *DDIToHPCExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error {
+func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context) error {
 
 	ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
 	if err != nil {
 		return err
 	}
 
-	sourcePath := e.GetValueFromEnvInputs(ddiDatasetPathEnvVar)
-	if sourcePath == "" {
+	sourceDatasetPath := e.GetValueFromEnvInputs(ddiDatasetPathEnvVar)
+	if sourceDatasetPath == "" {
 		return errors.Errorf("Failed to get path of dataset to transfer from DDI")
+	}
+
+	var sourceFilePath string
+	filePattern := e.GetValueFromEnvInputs(filePatternEnvVar)
+	if filePattern != "" {
+		// Find a file matching this pattern
+		var sourceFilePaths []string
+		sourceFilePathsStr := e.GetValueFromEnvInputs(ddiDatasetFilePathsEnvVar)
+		if sourceFilePathsStr != "" {
+			err = json.Unmarshal([]byte(sourceFilePathsStr), &sourceFilePaths)
+			if err != nil {
+				return errors.Wrapf(err, "Wrong format for lsit o ffile paths %q for deployment %s node %s",
+					sourceFilePathsStr, e.DeploymentID, e.NodeName)
+			}
+		}
+
+		if len(sourceFilePaths) == 0 {
+			return errors.Errorf("No file paths set from associated files provider in source dataset")
+		}
+
+		for _, fpath := range sourceFilePaths {
+			matched, err := regexp.MatchString(filePattern, fpath)
+			if err != nil {
+				return errors.Wrapf(err, "Failed to find matching pattern %s in source files", filePattern)
+			}
+			if matched {
+				sourceFilePath = fpath
+				break
+			}
+		}
+
+		if sourceFilePath == "" {
+			return errors.Errorf("Found no file with pattern %q in source files %+v", filePattern, sourceFilePaths)
+		}
+	}
+
+	var sourcePath string
+	if sourceFilePath != "" {
+		sourcePath = sourceFilePath
+		fileName := path.Base(sourcePath)
+		err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+			fileNameConsulAttribute, fileName)
+		if err != nil {
+			return errors.Wrapf(err, "Failed to store %s %s %s value %s", e.DeploymentID, e.NodeName, fileNameConsulAttribute, fileName)
+		}
+	} else {
+		sourcePath = sourceDatasetPath
 	}
 
 	destPath := e.GetValueFromEnvInputs(hpcDirectoryPathEnvVar)
@@ -130,6 +178,7 @@ func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error
 	if !found {
 		return errors.Errorf("Failed to find task %s in associated job", taskName)
 	}
+
 	taskDirPath := path.Join(destPath, taskID)
 
 	metadata, err := e.getMetadata(ctx)

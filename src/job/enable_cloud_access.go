@@ -79,17 +79,12 @@ func (e *EnableCloudAccessJobExecution) submitEnableCloudAccess(ctx context.Cont
 		return err
 	}
 
-	token := e.getValueFromEnvInputs(tokenEnvVar)
-	if token == "" {
-		return errors.Errorf("Failed to get token")
-	}
-
-	ipAddress := e.getValueFromEnvInputs(ipAddressEnvVar)
+	ipAddress := e.GetValueFromEnvInputs(ipAddressEnvVar)
 	if ipAddress == "" {
 		return errors.Errorf("Failed to get ip address for which to enable access to Cloud staging area")
 	}
 
-	requestID, err := ddiClient.SubmitEnableCloudAccess(token, ipAddress)
+	requestID, err := ddiClient.SubmitEnableCloudAccess(e.Token, ipAddress)
 	if err != nil {
 		return err
 	}

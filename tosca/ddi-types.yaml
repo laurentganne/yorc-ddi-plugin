@@ -248,7 +248,7 @@ node_types:
     derived_from: org.ddi.nodes.pub.Cloud
     abstract: true
     description: >
-      Transfer datasets from Cloud staging area to DDI (abstract)
+      Transfer data from Cloud staging area to DDI (abstract)
     properties:
       token:
         description: Access token
@@ -260,6 +260,10 @@ node_types:
         required: false
       source_subdirectory:
         description: Subdirectoy to copy (appended to the path provided by the cloud area provider path provided in requirements)
+        type: string
+        required: false
+      source_file_name:
+        description: "Name of the file to copy (if not set, directory contents will be copied)"
         type: string
         required: false
       ddi_path:
@@ -297,6 +301,7 @@ node_types:
         submit:
           inputs:
             SOURCE_SUBDIRECTORY:  { get_property: [SELF, source_subdirectory] }
+            SOURCE_FILE_NAME:  { get_property: [SELF, source_file_name] }
             DDI_PATH: { get_property: [SELF, ddi_path] }
             CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_directory_provider, staging_area_directory_path] }
           implementation:
@@ -313,7 +318,7 @@ node_types:
   org.ddi.nodes.CloudToDDIJob:
     derived_from: org.ddi.nodes.pub.CloudToDDIJob
     description: >
-      Transfer datasets from Cloud staging area to DDI
+      Transfer data from Cloud staging area to DDI
   org.ddi.nodes.pub.DeleteCloudDataJob:
     derived_from: tosca.nodes.Root
     abstract: true
@@ -796,7 +801,7 @@ capability_types:
     attributes:
       staging_area_directory_path:
         type: string
-        description: Path of the root directory in Cloud staging area
+        description: Path of the directory in Cloud staging area
       directory_absolute_path:
         type: string
         description: Absolute path of the directory in Cloud staging area mounted on a host

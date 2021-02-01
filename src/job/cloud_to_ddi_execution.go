@@ -90,6 +90,11 @@ func (e *CloudToDDIJobExecution) submitDataTransferRequest(ctx context.Context) 
 		sourcePath = filepath.Join(sourcePath, sourceSubDirPath)
 	}
 
+	sourceFileName := e.GetValueFromEnvInputs(sourceFileNameEnvVar)
+	if sourceFileName != "" {
+		sourcePath = filepath.Join(sourcePath, sourceFileName)
+	}
+
 	destPath := e.GetValueFromEnvInputs(ddiPathEnvVar)
 	if destPath == "" {
 		return errors.Errorf("Failed to get path of desired transferred dataset in DDI")

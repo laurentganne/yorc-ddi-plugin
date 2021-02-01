@@ -47,6 +47,7 @@ const (
 	ddiDatasetFilePathsEnvVar             = "DDI_DATASET_FILE_PATHS"
 	ddiPathEnvVar                         = "DDI_PATH"
 	sourceSubDirEnvVar                    = "SOURCE_SUBDIRECTORY"
+	sourceFileNameEnvVar                  = "SOURCE_FILE_NAME"
 	cloudStagingAreaDatasetPathEnvVar     = "CLOUD_STAGING_AREA_DIRECTORY_PATH"
 	timestampCloudStagingAreaDirEnvVar    = "TIMESTAMP_CLOUD_STAGING_AREA_DIRECTORY"
 	hpcDirectoryPathEnvVar                = "HPC_DIRECTORY_PATH"

@@ -126,18 +126,25 @@ func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error
 		return errors.Wrapf(err, "Failed to unmarshall map od task name - task id %s", strVal)
 	}
 
-	taskID, found := tasksNameID[taskName]
+	taskIDStr, found := tasksNameID[taskName]
 	if !found {
 		return errors.Errorf("Failed to find task %s in associated job", taskName)
 	}
-	taskDirPath := path.Join(destPath, taskID)
+	taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+	if err != nil {
+		err = errors.Wrapf(err, "Unexpected task ID value %q for deployment %s node %s",
+			taskIDStr, e.DeploymentID, e.NodeName)
+		return err
+	}
+	taskDirPath := path.Join(destPath, taskIDStr)
 
 	metadata, err := e.getMetadata(ctx)
 	if err != nil {
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, e.Token, targetSystem, sourcePath, taskDirPath, heappeJobID)
+	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, e.Token, targetSystem,
+		sourcePath, taskDirPath, heappeJobID, taskID)
 	if err != nil {
 		return err
 	}

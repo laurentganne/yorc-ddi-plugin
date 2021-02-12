@@ -56,7 +56,6 @@ const (
 	locationSSHFSURLPropertyName                         = "sshfs_url"
 	locationDatasetURLPropertyName                       = "dataset_url"
 	locationDDIAreaPropertyName                          = "ddi_area"
-	locationHPCStagingAreaNamePropertyName               = "hpc_staging_area_name"
 	locationCloudStagingAreaNamePropertyName             = "cloud_staging_area_name"
 	locationCloudStagingAreaRemoteFileSystemPropertyName = "cloud_staging_area_remote_file_system"
 	locationCloudStagingAreaMountTypePropertyName        = "cloud_staging_area_mount_type"
@@ -74,7 +73,7 @@ type Client interface {
 	SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
 	SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error)
 	SubmitDDIDataDeletion(token, path string) (string, error)
-	SubmitDDIToHPCDataTransfer(metadata Metadata, token, targetSystem, ddiSourcePath, hpcDirectoryPath string, jobID int64) (string, error)
+	SubmitDDIToHPCDataTransfer(metadata Metadata, token, targetSystem, ddiSourcePath, hpcDirectoryPath string, jobID, taskID int64) (string, error)
 	SubmitCloudStagingAreaDataDeletion(token, path string) (string, error)
 	GetDataTransferRequestStatus(token, requestID string) (string, string, error)
 	GetDeletionRequestStatus(token, requestID string) (string, error)
@@ -105,8 +104,6 @@ func GetClient(locationProps config.DynamicMap) (Client, error) {
 	if ddiArea == "" {
 		return nil, errors.Errorf("No %s property defined in DDI location configuration", locationDDIAreaPropertyName)
 	}
-	var hpcStagingArea LocationHPCStagingArea
-	hpcStagingArea.Name = locationProps.GetString(locationHPCStagingAreaNamePropertyName)
 	var cloudStagingArea LocationCloudStagingArea
 	cloudStagingArea.Name = locationProps.GetString(locationCloudStagingAreaNamePropertyName)
 	cloudStagingArea.RemoteFileSystem = locationProps.GetString(locationCloudStagingAreaRemoteFileSystemPropertyName)
@@ -117,7 +114,6 @@ func GetClient(locationProps config.DynamicMap) (Client, error) {
 
 	return &ddiClient{
 		ddiArea:           ddiArea,
-		hpcStagingArea:    hpcStagingArea,
 		cloudStagingArea:  cloudStagingArea,
 		httpStagingClient: getHTTPClient(url),
 		httpDatasetClient: getHTTPClient(datasetURL),
@@ -129,7 +125,6 @@ func GetClient(locationProps config.DynamicMap) (Client, error) {
 
 type ddiClient struct {
 	ddiArea           string
-	hpcStagingArea    LocationHPCStagingArea
 	cloudStagingArea  LocationCloudStagingArea
 	httpStagingClient *httpclient
 	httpDatasetClient *httpclient
@@ -273,7 +268,7 @@ func (d *ddiClient) SubmitCloudStagingAreaDataDeletion(token, path string) (stri
 }
 
 // SubmitDDIToHPCDataTransfer submits a data transfer request from DDI to HPC
-func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, targetSystem, ddiSourcePath, hpcDirectoryPath string, jobID int64) (string, error) {
+func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, targetSystem, ddiSourcePath, hpcDirectoryPath string, jobID, taskID int64) (string, error) {
 
 	request := HPCDataTransferRequest{
 		DataTransferRequest{
@@ -284,12 +279,13 @@ func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, targetS
 			TargetPath:   hpcDirectoryPath,
 		},
 		DataTransferRequestHPCExectension{
-			JobID: jobID,
+			JobID:  jobID,
+			TaskID: taskID,
 		},
 	}
 
 	requestStr, _ := json.Marshal(request)
-	log.Debugf("Submitting DDI request %s", string(requestStr))
+	log.Printf("LOLO Submitting DDI request %s", string(requestStr))
 
 	var response SubmittedRequestInfo
 	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingStageREST,

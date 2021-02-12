@@ -14,11 +14,6 @@
 
 package ddi
 
-// LocationHPCStagingArea holds properties of a HPC staging area
-type LocationHPCStagingArea struct {
-	Name string `yaml:"name" json:"name"`
-}
-
 // LocationCloudStagingArea holds properties of a HPC staging area
 type LocationCloudStagingArea struct {
 	Name             string `yaml:"name" json:"name"`
@@ -53,7 +48,8 @@ type DataTransferRequest struct {
 
 // DataTransferRequestHPCExectension holds additional parameters for data transfers on HPC
 type DataTransferRequestHPCExectension struct {
-	JobID int64 `json:"job_id"`
+	JobID  int64 `json:"job_id"`
+	TaskID int64 `json:"task_id"`
 }
 
 // HPCDataTransferRequest holds parameters of a data transfer request

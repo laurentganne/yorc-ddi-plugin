@@ -49,7 +49,7 @@ type DataTransferRequest struct {
 // DataTransferRequestHPCExectension holds additional parameters for data transfers on HPC
 type DataTransferRequestHPCExectension struct {
 	JobID  int64 `json:"job_id"`
-	TaskID int64 `json:"task_id"`
+	TaskID int64 `json:"task_id,omitempty"`
 }
 
 // HPCDataTransferRequest holds parameters of a data transfer request
@@ -86,6 +86,20 @@ type DatasetLocation struct {
 type DatasetSearchResult struct {
 	Location DatasetLocation `json:"location"`
 	Metadata Metadata        `json:"metadata"`
+}
+
+// DatasetCreateRequest holds properties of a request to create a dataset
+type DatasetCreateRequest struct {
+	PushMethod string   `json:"push_method"`
+	Access     string   `json:"access"`
+	Project    string   `json:"project,omitempty"`
+	Metadata   Metadata `json:"metadata,omitempty"`
+}
+
+// DatasetCreateResponse holds a dataset creation response
+type DatasetCreateResponse struct {
+	Status     string `json:"status"`
+	InternalID string `json:"internalID"`
 }
 
 // DatasetListingRequest holds properties of a request to list the content of a dataset

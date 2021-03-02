@@ -93,7 +93,7 @@ func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error
 	}
 
 	serverFQDN := e.GetValueFromEnvInputs(hpcServerEnvVar)
-	if destPath == "" {
+	if serverFQDN == "" {
 		return errors.Errorf("Failed to get HPC server")
 	}
 
@@ -143,8 +143,7 @@ func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, e.Token, targetSystem,
-		sourcePath, taskDirPath, heappeJobID, taskID)
+	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, e.Token, sourcePath, targetSystem, taskDirPath, heappeJobID, taskID)
 	if err != nil {
 		return err
 	}

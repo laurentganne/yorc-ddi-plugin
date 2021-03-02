@@ -34,16 +34,18 @@ const (
 	ddiInfrastructureType                 = "ddi"
 	locationJobMonitoringTimeInterval     = "job_monitoring_time_interval"
 	locationDefaultMonitoringTimeInterval = 5 * time.Second
-	ddiAccessComponentType                = "org.ddi.nodes.DDIAccess"
-	enableCloudStagingAreaJobType         = "org.ddi.nodes.EnableCloudStagingAreaAccessJob"
-	disableCloudStagingAreaJobType        = "org.ddi.nodes.DisableCloudStagingAreaAccessJob"
-	ddiToCloudJobType                     = "org.ddi.nodes.DDIToCloudJob"
-	ddiToHPCTaskJobType                   = "org.ddi.nodes.DDIToHPCTaskJob"
-	ddiRuntimeToCloudJobType              = "org.ddi.nodes.DDIRuntimeToCloudJob"
-	ddiRuntimeToHPCTaskJobType            = "org.ddi.nodes.DDIRuntimeToHPCTaskJob"
-	cloudToDDIJobType                     = "org.ddi.nodes.CloudToDDIJob"
-	waitForDDIDatasetJobType              = "org.ddi.nodes.pub.WaitForDDIDatasetJob"
-	deleteCloudDataJobType                = "org.ddi.nodes.DeleteCloudDataJob"
+	ddiAccessComponentType                = "org.lexis.common.ddi.nodes.DDIAccess"
+	enableCloudStagingAreaJobType         = "org.lexis.common.ddi.nodes.EnableCloudStagingAreaAccessJob"
+	disableCloudStagingAreaJobType        = "org.lexis.common.ddi.nodes.DisableCloudStagingAreaAccessJob"
+	ddiToCloudJobType                     = "org.lexis.common.ddi.nodes.DDIToCloudJob"
+	ddiToHPCTaskJobType                   = "org.lexis.common.ddi.nodes.DDIToHPCTaskJob"
+	hpcToDDIJobType                       = "org.lexis.common.ddi.nodes.pub.HPCToDDIJob"
+	ddiRuntimeToCloudJobType              = "org.lexis.common.ddi.nodes.DDIRuntimeToCloudJob"
+	ddiRuntimeToHPCTaskJobType            = "org.lexis.common.ddi.nodes.DDIRuntimeToHPCTaskJob"
+	cloudToDDIJobType                     = "org.lexis.common.ddi.nodes.CloudToDDIJob"
+	waitForDDIDatasetJobType              = "org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob"
+	storeRunningHPCJobType                = "org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob"
+	deleteCloudDataJobType                = "org.lexis.common.ddi.nodes.DeleteCloudDataJob"
 )
 
 // Execution is the interface holding functions to execute an operation
@@ -226,6 +228,30 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		return exec, exec.ResolveExecution(ctx)
 	}
 
+	isHPCToDDIJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, hpcToDDIJobType)
+	if err != nil {
+		return exec, err
+	}
+	if isHPCToDDIJob {
+		exec = &job.HPCToDDIExecution{
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Token:        token,
+					Operation:    operation,
+				},
+				ActionType:             job.DataTransferAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
+		}
+
+		return exec, exec.ResolveExecution(ctx)
+	}
+
 	isDDIRuntimeToHPCTaskJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, ddiRuntimeToHPCTaskJobType)
 	if err != nil {
 		return exec, err
@@ -256,6 +282,27 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	}
 	if isWaitForDDIDatasetJobType {
 		exec = &job.WaitForDataset{
+			DDIExecution: &common.DDIExecution{
+				KV:           kv,
+				Cfg:          cfg,
+				DeploymentID: deploymentID,
+				TaskID:       taskID,
+				NodeName:     nodeName,
+				Token:        token,
+				Operation:    operation,
+			},
+			MonitoringTimeInterval: monitoringTimeInterval,
+		}
+
+		return exec, exec.ResolveExecution(ctx)
+	}
+
+	isStoreRunningHPCJobType, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, storeRunningHPCJobType)
+	if err != nil {
+		return exec, err
+	}
+	if isStoreRunningHPCJobType {
+		exec = &job.StoreRunningHPCJobFilesToDDI{
 			DDIExecution: &common.DDIExecution{
 				KV:           kv,
 				Cfg:          cfg,

@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"path"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -29,13 +28,13 @@ import (
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// DDIRuntimeToHPCExecution holds DDI to HPC data transfer job Execution properties
-type DDIRuntimeToHPCExecution struct {
+// HPCToDDIExecution holds HPC to DDI data transfer job Execution properties
+type HPCToDDIExecution struct {
 	*DDIJobExecution
 }
 
 // Execute executes a synchronous operation
-func (e *DDIRuntimeToHPCExecution) Execute(ctx context.Context) error {
+func (e *HPCToDDIExecution) Execute(ctx context.Context) error {
 
 	var err error
 	switch strings.ToLower(e.Operation.Name) {
@@ -76,77 +75,30 @@ func (e *DDIRuntimeToHPCExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context) error {
+func (e *HPCToDDIExecution) submitDataTransferRequest(ctx context.Context) error {
 
 	ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
 	if err != nil {
 		return err
 	}
 
-	sourceDatasetPath := e.GetValueFromEnvInputs(ddiDatasetPathEnvVar)
-	if sourceDatasetPath == "" {
-		return errors.Errorf("Failed to get path of dataset to transfer from DDI")
+	ddiPath := e.GetValueFromEnvInputs(ddiPathEnvVar)
+	if ddiPath == "" {
+		return errors.Errorf("Failed to get DDI path")
 	}
 
-	var sourceFilePath string
-	filePattern := e.GetValueFromEnvInputs(filePatternEnvVar)
-	if filePattern != "" {
-		// Find a file matching this pattern
-		var sourceFilePaths []string
-		sourceFilePathsStr := e.GetValueFromEnvInputs(ddiDatasetFilePathsEnvVar)
-		if sourceFilePathsStr != "" {
-			err = json.Unmarshal([]byte(sourceFilePathsStr), &sourceFilePaths)
-			if err != nil {
-				return errors.Wrapf(err, "Wrong format for lsit o ffile paths %q for deployment %s node %s",
-					sourceFilePathsStr, e.DeploymentID, e.NodeName)
-			}
-		}
-
-		if len(sourceFilePaths) == 0 {
-			return errors.Errorf("No file paths set from associated files provider in source dataset")
-		}
-
-		for _, fpath := range sourceFilePaths {
-			matched, err := regexp.MatchString(filePattern, fpath)
-			if err != nil {
-				return errors.Wrapf(err, "Failed to find matching pattern %s in source files", filePattern)
-			}
-			if matched {
-				sourceFilePath = fpath
-				break
-			}
-		}
-
-		if sourceFilePath == "" {
-			return errors.Errorf("Found no file with pattern %q in source files %+v", filePattern, sourceFilePaths)
-		}
-	}
-
-	var sourcePath string
-	if sourceFilePath != "" {
-		sourcePath = sourceFilePath
-		fileName := path.Base(sourcePath)
-		err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
-			fileNameConsulAttribute, fileName)
-		if err != nil {
-			return errors.Wrapf(err, "Failed to store %s %s %s value %s", e.DeploymentID, e.NodeName, fileNameConsulAttribute, fileName)
-		}
-	} else {
-		sourcePath = sourceDatasetPath
-	}
-
-	destPath := e.GetValueFromEnvInputs(hpcDirectoryPathEnvVar)
-	if destPath == "" {
+	jobDirPath := e.GetValueFromEnvInputs(hpcDirectoryPathEnvVar)
+	if jobDirPath == "" {
 		return errors.Errorf("Failed to get HPC directory path")
 	}
 
 	serverFQDN := e.GetValueFromEnvInputs(hpcServerEnvVar)
-	if destPath == "" {
+	if serverFQDN == "" {
 		return errors.Errorf("Failed to get HPC server")
 	}
 
 	res := strings.SplitN(serverFQDN, ".", 2)
-	targetSystem := res[0] + "_home"
+	sourceSystem := res[0] + "_home"
 
 	heappeJobIDStr := e.GetValueFromEnvInputs(heappeJobIDEnvVar)
 	if heappeJobIDStr == "" {
@@ -159,11 +111,8 @@ func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context
 		return err
 	}
 
+	sourcePath := jobDirPath
 	taskName := e.GetValueFromEnvInputs(taskNameEnvVar)
-	if taskName == "" {
-		return errors.Errorf("Failed to get task name")
-	}
-
 	strVal := e.GetValueFromEnvInputs(tasksNameIdEnvVar)
 	if strVal == "" {
 		return errors.Errorf("Failed to get map of tasks name-id from associated job")
@@ -173,26 +122,36 @@ func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context
 	if err != nil {
 		return errors.Wrapf(err, "Failed to unmarshall map od task name - task id %s", strVal)
 	}
-
-	taskIDStr, found := tasksNameID[taskName]
-	if !found {
+	var taskIDStr string
+	if taskName != "" {
+		taskIDStr = tasksNameID[taskName]
+		sourcePath = path.Join(jobDirPath, taskIDStr)
+	} else {
+		// just need to define a task ID for the REST request
+		for _, v := range tasksNameID {
+			taskIDStr = v
+			break
+		}
+	}
+	var taskID int64
+	if taskIDStr == "" {
 		return errors.Errorf("Failed to find task %s in associated job", taskName)
+	} else {
+		taskID, err = strconv.ParseInt(taskIDStr, 10, 64)
+		if err != nil {
+			err = errors.Wrapf(err, "Unexpected Task ID ID value %q for deployment %s node %s",
+				taskIDStr, e.DeploymentID, e.NodeName)
+			return err
+		}
 	}
-	taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
-	if err != nil {
-		err = errors.Wrapf(err, "Unexpected task ID value %q for deployment %s node %s",
-			taskIDStr, e.DeploymentID, e.NodeName)
-		return err
-	}
-
-	taskDirPath := path.Join(destPath, taskIDStr)
 
 	metadata, err := e.getMetadata(ctx)
 	if err != nil {
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, e.Token, sourcePath, targetSystem, taskDirPath, heappeJobID, taskID)
+	requestID, err := ddiClient.SubmitHPCToDDIDataTransfer(metadata, e.Token, sourceSystem,
+		sourcePath, ddiPath, heappeJobID, taskID)
 	if err != nil {
 		return err
 	}

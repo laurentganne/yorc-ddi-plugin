@@ -30,10 +30,6 @@ import (
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-const (
-	filesPatternProperty = "needed_files_patterns"
-)
-
 // WaitForDataset holds DDI to HPC data transfer job Execution properties
 type WaitForDataset struct {
 	*common.DDIExecution

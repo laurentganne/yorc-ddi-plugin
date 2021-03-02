@@ -73,7 +73,8 @@ type Client interface {
 	SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
 	SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error)
 	SubmitDDIDataDeletion(token, path string) (string, error)
-	SubmitDDIToHPCDataTransfer(metadata Metadata, token, targetSystem, ddiSourcePath, hpcDirectoryPath string, jobID, taskID int64) (string, error)
+	SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath string, jobID, taskID int64) (string, error)
+	SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath string, jobID, taskID int64) (string, error)
 	SubmitCloudStagingAreaDataDeletion(token, path string) (string, error)
 	GetDataTransferRequestStatus(token, requestID string) (string, string, error)
 	GetDeletionRequestStatus(token, requestID string) (string, error)
@@ -82,6 +83,7 @@ type Client interface {
 	GetSshfsURL() string
 	GetDatasetURL() string
 	SearchDataset(token string, metadata Metadata) ([]DatasetSearchResult, error)
+	CreateEmptyDatasetInProject(token, project string, metadata Metadata) (string, error)
 	ListDataSet(token, datasetID, access, project string, recursive bool) (DatasetListing, error)
 }
 
@@ -268,7 +270,7 @@ func (d *ddiClient) SubmitCloudStagingAreaDataDeletion(token, path string) (stri
 }
 
 // SubmitDDIToHPCDataTransfer submits a data transfer request from DDI to HPC
-func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, targetSystem, ddiSourcePath, hpcDirectoryPath string, jobID, taskID int64) (string, error) {
+func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath string, jobID, taskID int64) (string, error) {
 
 	request := HPCDataTransferRequest{
 		DataTransferRequest{
@@ -292,6 +294,36 @@ func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, targetS
 		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
 	if err != nil {
 		err = errors.Wrapf(err, "Failed to submit DDI %s to HPC %s %s data transfer", ddiSourcePath, targetSystem, hpcDirectoryPath)
+	}
+
+	return response.RequestID, err
+}
+
+// SubmitHPCToDDIDataTransfer submits a data transfer request from HPC to DDI
+func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath string, jobID, taskID int64) (string, error) {
+
+	request := HPCDataTransferRequest{
+		DataTransferRequest{
+			Metadata:     metadata,
+			SourceSystem: sourceSystem,
+			SourcePath:   hpcDirectoryPath,
+			TargetSystem: d.ddiArea,
+			TargetPath:   ddiPath,
+		},
+		DataTransferRequestHPCExectension{
+			JobID:  jobID,
+			TaskID: taskID,
+		},
+	}
+
+	requestStr, _ := json.Marshal(request)
+	log.Printf("LOLO Submitting DDI request %s", string(requestStr))
+
+	var response SubmittedRequestInfo
+	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingStageREST,
+		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit HPC %s %s to DDI %s data transfer", sourceSystem, hpcDirectoryPath, ddiPath)
 	}
 
 	return response.RequestID, err
@@ -360,6 +392,25 @@ func (d *ddiClient) SearchDataset(token string, metadata Metadata) ([]DatasetSea
 	}
 
 	return response, err
+}
+
+func (d *ddiClient) CreateEmptyDatasetInProject(token, project string, metadata Metadata) (string, error) {
+	var response DatasetCreateResponse
+
+	request := DatasetCreateRequest{
+		PushMethod: "empty",
+		Access:     "project",
+		Project:    project,
+		Metadata:   metadata,
+	}
+	err := d.httpDatasetClient.doRequest(http.MethodPost, "",
+		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to search dataset with request %v", request)
+	}
+
+	return response.InternalID, err
+
 }
 
 // ListDataSet lists the content of a dataset

@@ -1,19 +1,19 @@
 tosca_definitions_version: yorc_tosca_simple_yaml_1_0
 
 metadata:
-  template_name: ddi-types
+  template_name: org.lexis.common.ddi-types
   template_version: 0.1.3
   template_author: yorc
 
 imports:
-  - heappe-types:1.0.3
+  - org.lexis.common.heappe-types:1.0.3
   - <yorc-types.yml>
 
 artifact_types:
-  org.ddi.artifacts.Deployment:
+  org.lexis.common.ddi.artifacts.Deployment:
     derived_from: tosca.artifacts.Deployment
 data_types:
-  org.ddi.types.Metadata:
+  org.lexis.common.ddi.types.Metadata:
     derived_from: tosca.datatypes.Root
     properties:
       creator:
@@ -62,17 +62,37 @@ data_types:
         entry_schema:
           type: string
         required: false
+  org.lexis.common.ddi.types.StoredFileInfo:
+    derived_from: tosca.datatypes.Root
+    properties:
+      LastModifiedDate:
+        type: string
+        description: >
+          Last modified date of a stored file
+      RequestID:
+        type: string
+        description: DDI request ID used to store the file
+  org.lexis.common.ddi.types.ToBeStoredFileInfo:
+    derived_from: tosca.datatypes.Root
+    properties:
+      LastModifiedDate:
+        type: string
+        description: >
+          Last modified date of the file
+      CandidateToStorageDate:
+        type: string
+        description: Date to which the file was first considered to a candidate to storage
 node_types:
-  org.ddi.nodes.pub.Cloud:
+  org.lexis.common.ddi.nodes.pub.Cloud:
     derived_from: tosca.nodes.Root
     abstract: true
     description: >
       Parent type of DDI cloud-related node types (abstract)
     capabilities:
       cloud_staging_area_access:
-        type: org.ddi.capabilities.CloudStagingAreaAccess
-  org.ddi.nodes.EnableCloudStagingAreaAccessJob:
-    derived_from: org.ddi.nodes.pub.Cloud
+        type: org.lexis.common.ddi.capabilities.CloudStagingAreaAccess
+  org.lexis.common.ddi.nodes.EnableCloudStagingAreaAccessJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     description: >
       Enable the access to the Cloud Staging Area for a Compute Instance
     # Atributes added here in addition to capability attributes, so that they
@@ -101,18 +121,18 @@ node_types:
       - os:
           capability: tosca.capabilities.OperatingSystem
           node: tosca.nodes.Compute
-          relationship: org.ddi.relationships.SameSite
+          relationship: org.lexis.common.ddi.relationships.SameSite
           occurrences: [1, 1]
     interfaces:
       Standard:
         create:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         delete:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
           TOKEN: { get_property: [SELF, token] }
@@ -121,17 +141,17 @@ node_types:
             IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         run:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         cancel:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
-  org.ddi.nodes.DisableCloudStagingAreaAccessJob:
-    derived_from: org.ddi.nodes.pub.Cloud
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.DisableCloudStagingAreaAccessJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     description: >
       Disable the access to the Cloud Staging Area for a Compute Instance
     attributes:
@@ -143,18 +163,18 @@ node_types:
       - os:
           capability: tosca.capabilities.OperatingSystem
           node: tosca.nodes.Compute
-          relationship: org.ddi.relationships.SameSite
+          relationship: org.lexis.common.ddi.relationships.SameSite
           occurrences: [1, 1]
     interfaces:
       Standard:
         create:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         delete:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
           TOKEN: { get_property: [SELF, token] }
@@ -163,17 +183,17 @@ node_types:
             IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         run:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         cancel:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
-  org.ddi.nodes.pub.DDIToCloudJob:
-    derived_from: org.ddi.nodes.pub.Cloud
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.pub.DDIToCloudJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     abstract: true
     description: >
       Transfer datasets from DDI to Cloud staging area (abstract)
@@ -210,17 +230,17 @@ node_types:
         description: Path of the dataset directory in Cloud staging area
     capabilities:
       data_transfer:
-        type: org.ddi.capabilities.DataTransferCloud
+        type: org.lexis.common.ddi.capabilities.DataTransferCloud
     interfaces:
       Standard:
         create:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         delete:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
           TOKEN: { get_property: [SELF, token] }
@@ -231,21 +251,21 @@ node_types:
             TIMESTAMP_CLOUD_STAGING_AREA_DIRECTORY: { get_property: [SELF, timestamp_cloud_staging_area_directory] }
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         run:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         cancel:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
-  org.ddi.nodes.DDIToCloudJob:
-    derived_from: org.ddi.nodes.pub.DDIToCloudJob
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.DDIToCloudJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.DDIToCloudJob
     description: >
       Transfer datasets from DDI to Cloud staging area
-  org.ddi.nodes.pub.CloudToDDIJob:
-    derived_from: org.ddi.nodes.pub.Cloud
+  org.lexis.common.ddi.nodes.pub.CloudToDDIJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     abstract: true
     description: >
       Transfer data from Cloud staging area to DDI (abstract)
@@ -256,7 +276,7 @@ node_types:
         required: true
       metadata:
         description: Dataset metadata
-        type: org.ddi.types.Metadata
+        type: org.lexis.common.ddi.types.Metadata
         required: false
       source_subdirectory:
         description: Subdirectoy to copy (appended to the path provided by the cloud area provider path provided in requirements)
@@ -269,6 +289,7 @@ node_types:
       ddi_path:
         description: Path where to transfer the dataset in DDI
         type: string
+        required: true
     attributes:
       request_id:
         type: string
@@ -279,22 +300,22 @@ node_types:
         description: Path to the dataset transferred in DDI
     capabilities:
       data_transfer:
-        type: org.ddi.capabilities.DataTransferDDI
+        type: org.lexis.common.ddi.capabilities.DataTransferDDI
     requirements:
       - cloud_area_directory_provider:
-          capability: org.ddi.capabilities.CloudAreaDirectoryProvider
-          relationship: org.ddi.relationships.CloudAreaDirectoryProvider
+          capability: org.lexis.common.ddi.capabilities.CloudAreaDirectoryProvider
+          relationship: org.lexis.common.ddi.relationships.CloudAreaDirectoryProvider
           occurrences: [1, 1]
     interfaces:
       Standard:
         create:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         delete:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
           TOKEN: { get_property: [SELF, token] }
@@ -306,20 +327,20 @@ node_types:
             CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_directory_provider, staging_area_directory_path] }
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         run:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         cancel:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
-  org.ddi.nodes.CloudToDDIJob:
-    derived_from: org.ddi.nodes.pub.CloudToDDIJob
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.CloudToDDIJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.CloudToDDIJob
     description: >
       Transfer data from Cloud staging area to DDI
-  org.ddi.nodes.pub.DeleteCloudDataJob:
+  org.lexis.common.ddi.nodes.pub.DeleteCloudDataJob:
     derived_from: tosca.nodes.Root
     abstract: true
     description: >
@@ -336,22 +357,22 @@ node_types:
           ID of the DDI request created
     capabilities:
       cloud_delete:
-        type: org.ddi.capabilities.DeleteCloudData
+        type: org.lexis.common.ddi.capabilities.DeleteCloudData
     requirements:
       - cloud_area_dataset_provider:
-          capability: org.ddi.capabilities.DataTransferCloud
-          relationship: org.ddi.relationships.CloudAreaDatasetProvider
+          capability: org.lexis.common.ddi.capabilities.DataTransferCloud
+          relationship: org.lexis.common.ddi.relationships.CloudAreaDatasetProvider
           occurrences: [1, 1]
     interfaces:
       Standard:
         create:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         delete:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
           TOKEN: { get_property: [SELF, token] }
@@ -360,20 +381,20 @@ node_types:
             CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_dataset_provider, staging_area_directory_path] }
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         run:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         cancel:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
-  org.ddi.nodes.DeleteCloudDataJob:
-    derived_from: org.ddi.nodes.pub.DeleteCloudDataJob
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.DeleteCloudDataJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.DeleteCloudDataJob
     description: >
       Delete a dataset from Cloud staging area
-  org.ddi.nodes.pub.DDIToHPCTaskJob:
+  org.lexis.common.ddi.nodes.pub.DDIToHPCTaskJob:
     derived_from: tosca.nodes.Root
     abstract: true
     description: >
@@ -385,7 +406,7 @@ node_types:
         required: true
       metadata:
         description: Dataset metadata
-        type: org.ddi.types.Metadata
+        type: org.lexis.common.ddi.types.Metadata
         required: false
       ddi_dataset_path:
         description: Path of the DDI dataset to transfer to HPC
@@ -405,23 +426,23 @@ node_types:
         description: Path to the data transferred in HPC infrastructure
     capabilities:
       data_transfer:
-        type: org.ddi.capabilities.DataTransferHPC
+        type: org.lexis.common.ddi.capabilities.DataTransferHPC
     requirements:
       - job:
-          capability: org.heappe.capabilities.HeappeJob
-          node: org.heappe.nodes.Job
-          relationship: org.heappe.relationships.SendInputsToJob
+          capability: org.lexis.common.heappe.capabilities.HeappeJob
+          node: org.lexis.common.heappe.nodes.Job
+          relationship: org.lexis.common.heappe.relationships.SendInputsToJob
           occurrences: [1, 1]
     interfaces:
       Standard:
         create:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         delete:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
           TOKEN: { get_property: [SELF, token] }
@@ -435,20 +456,198 @@ node_types:
             TASK_NAME: {get_property: [SELF, task_name]}
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         run:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         cancel:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
-  org.ddi.nodes.DDIToHPCTaskJob:
-    derived_from: org.ddi.nodes.pub.DDIToHPCTaskJob
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.DDIToHPCTaskJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.DDIToHPCTaskJob
     description: >
       Transfer datasets from DDI to HPC staging area for a given task in the job
-  org.ddi.nodes.DDIAccess:
+  org.lexis.common.ddi.nodes.pub.HPCToDDIJob:
+    derived_from: tosca.nodes.Root
+    abstract: true
+    description: >
+      Transfer data from an HPC job to DDI (abstract)
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
+      metadata:
+        description: Metadata of the dataset to create
+        type: org.lexis.common.ddi.types.Metadata
+        required: true
+      ddi_path:
+        description: Path where to transfer the dataset in DDI
+        type: string
+        required: true
+      task_name:
+        description: Name of the task for which to store results. If not set, all tasks results are saved.
+        type: string
+        required: false
+    attributes:
+      request_id:
+        type: string
+        description: >
+          ID of the DDI request created
+      destination_path:
+        type: string
+        description: Path to the dataset transferred in DDI
+      stored_file_paths:
+        type: list
+        entry_schema:
+          type: string
+        description: |
+          List of result files stored in DDI
+    capabilities:
+      data_transfer:
+        type: org.lexis.common.ddi.capabilities.DataTransferDDI
+    requirements:
+      - job:
+          capability: org.lexis.common.heappe.capabilities.HeappeJob
+          node: org.lexis.common.heappe.nodes.Job
+          relationship: org.lexis.common.ddi.relationships.SendJobOutputsToDDI
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+        delete:
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
+            HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
+            HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
+            TASK_NAME: {get_property: [SELF, task_name]}
+            DDI_PATH: { get_property: [SELF, ddi_path] }
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+        run:
+          inputs:
+            JOB_CHANGED_FILES: {get_attribute: [REQ_TARGET, job, changed_files]}
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+        cancel:
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.HPCToDDIJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.HPCToDDIJob
+    description: >
+      Transfer data from an HPC job to DDI
+  org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob:
+    derived_from: tosca.nodes.Root
+    abstract: true
+    description: >
+      Transfer files from an HPC running job to DDI until this HPC job ends (abstract)
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
+      metadata:
+        description: Metadata of the dataset to create
+        type: org.lexis.common.ddi.types.Metadata
+        required: true
+      project:
+        description: Name of the project where to store the result dataset
+        type: string
+        required: true
+      last_modification_elapsed_time_minutes:
+        description: Elapsed time in minutes since last modification after which a file can be stored in DDI
+        type: integer
+        required: false
+        default: 2
+      task_name:
+        description: Name of the task for which to store results. If not set, all tasks results are saved.
+        type: string
+        required: false
+      needed_files_patterns:
+        type: list
+        entry_schema:
+          type: string
+        description: >
+          List of patterns of files that have to be stored.
+          If empty, all files created/updated after the job start will be stored
+        required: false
+    attributes:
+      destination_path:
+        type: string
+        description: Path to the dataset transferred in DDI
+      stored_files:
+        type: map
+        entry_schema:
+          type: org.lexis.common.ddi.types.StoredFileInfo
+        description: Files stored, with their last modification data
+      to_be_stored_files:
+        type: map
+        entry_schema:
+          type: org.lexis.common.ddi.types.ToBeStoredFileInfo
+        description: files to be stored, once they won't be modified for a given elapsed time
+    capabilities:
+      data_transfer:
+        type: org.lexis.common.ddi.capabilities.DataTransferDDI
+    requirements:
+      - job:
+          capability: org.lexis.common.heappe.capabilities.HeappeJob
+          node: org.lexis.common.heappe.nodes.Job
+          relationship: org.lexis.common.ddi.relationships.SendJobOutputsToDDI
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+        delete:
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+        run:
+          inputs:
+            HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
+            HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
+            HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
+            JOB_CHANGED_FILES: {get_attribute: [REQ_TARGET, job, changed_files]}
+            JOB_START_DATE: {get_attribute: [REQ_TARGET, job, start_date]}
+            JOB_STATE: {get_attribute: [REQ_TARGET, job, state]}
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+        cancel:
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob
+    description: >
+      Transfer files from an HPC running job to DDI until this HPC job ends
+  org.lexis.common.ddi.nodes.DDIAccess:
     derived_from: tosca.nodes.Root
     description: >
       Provides access to the DDI API
@@ -463,20 +662,20 @@ node_types:
           DDI API SSHFS export URL on the local site
     capabilities:
       ddi_access:
-        type: org.ddi.capabilities.DDIAccess
+        type: org.lexis.common.ddi.capabilities.DDIAccess
     requirements:
       - os:
           capability: tosca.capabilities.OperatingSystem
           node: tosca.nodes.Compute
-          relationship: org.ddi.relationships.SameSite
+          relationship: org.lexis.common.ddi.relationships.SameSite
           occurrences: [1, 1]
     interfaces:
       Standard:
         start:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
-  org.ddi.nodes.pub.WaitForDDIDatasetJob:
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob:
     derived_from: tosca.nodes.Root
     abstract: true
     description: >
@@ -488,7 +687,7 @@ node_types:
         required: true
       metadata:
         description: Dataset metadata
-        type: org.ddi.types.Metadata
+        type: org.lexis.common.ddi.types.Metadata
         required: true
       needed_files_patterns:
         type: list
@@ -514,17 +713,17 @@ node_types:
           Path of dataset files matching the patterns
     capabilities:
       dataset_files:
-        type: org.ddi.capabilities.DatasetFilesProvider
+        type: org.lexis.common.ddi.capabilities.DatasetFilesProvider
     interfaces:
       Standard:
         create:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         delete:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
           TOKEN: { get_property: [SELF, token] }
@@ -534,21 +733,21 @@ node_types:
             NEEDED_FILES_PATTERNS: { get_property: [SELF, needed_files_patterns] }
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         run:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         cancel:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
-  org.ddi.nodes.WaitForDDIDatasetJob:
-    derived_from: org.ddi.nodes.pub.WaitForDDIDatasetJob
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.WaitForDDIDatasetJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob
     description: >
       Wait for a dataset to appear in DDI, and optionally wait for files in this dataset
-  org.ddi.nodes.pub.DDIRuntimeToCloudJob:
-    derived_from: org.ddi.nodes.pub.Cloud
+  org.lexis.common.ddi.nodes.pub.DDIRuntimeToCloudJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     abstract: true
     description: >
       Transfer from DDI to Cloud staging area, a dataset (or one dataset file) selected at runtime (abstract)
@@ -589,23 +788,23 @@ node_types:
         description: Path of the dataset directory in Cloud staging area
     capabilities:
       data_transfer:
-        type: org.ddi.capabilities.DataTransferCloud
+        type: org.lexis.common.ddi.capabilities.DataTransferCloud
     requirements:
       - dataset_files:
-          capability: org.ddi.capabilities.DatasetFilesProvider
-          node: org.ddi.nodes.pub.WaitForDDIDatasetJob
-          relationship: org.ddi.relationships.DatasetFilesProvider
+          capability: org.lexis.common.ddi.capabilities.DatasetFilesProvider
+          node: org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob
+          relationship: org.lexis.common.ddi.relationships.DatasetFilesProvider
           occurrences: [1, 1]
     interfaces:
       Standard:
         create:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         delete:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
           TOKEN: { get_property: [SELF, token] }
@@ -618,20 +817,20 @@ node_types:
             TIMESTAMP_CLOUD_STAGING_AREA_DIRECTORY: { get_property: [SELF, timestamp_cloud_staging_area_directory] }
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         run:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         cancel:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
-  org.ddi.nodes.DDIRuntimeToCloudJob:
-    derived_from: org.ddi.nodes.pub.DDIRuntimeToCloudJob
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.DDIRuntimeToCloudJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.DDIRuntimeToCloudJob
     description: >
       Transfer from DDI to Cloud staging area, a dataset (or one dataset file) selected at runtime
-  org.ddi.nodes.pub.DDIRuntimeToHPCTaskJob:
+  org.lexis.common.ddi.nodes.pub.DDIRuntimeToHPCTaskJob:
     derived_from: tosca.nodes.Root
     abstract: true
     description: >
@@ -663,28 +862,28 @@ node_types:
         description: Path to the data transferred in HPC infrastructure
     capabilities:
       data_transfer:
-        type: org.ddi.capabilities.DataTransferHPC
+        type: org.lexis.common.ddi.capabilities.DataTransferHPC
     requirements:
       - job:
-          capability: org.heappe.capabilities.HeappeJob
-          node: org.heappe.nodes.Job
-          relationship: org.heappe.relationships.SendInputsToJob
+          capability: org.lexis.common.heappe.capabilities.HeappeJob
+          node: org.lexis.common.heappe.nodes.Job
+          relationship: org.lexis.common.heappe.relationships.SendInputsToJob
           occurrences: [1, 1]
       - dataset_files:
-          capability: org.ddi.capabilities.DatasetFilesProvider
-          node: org.ddi.nodes.pub.WaitForDDIDatasetJob
-          relationship: org.ddi.relationships.DatasetFilesProvider
+          capability: org.lexis.common.ddi.capabilities.DatasetFilesProvider
+          node: org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob
+          relationship: org.lexis.common.ddi.relationships.DatasetFilesProvider
           occurrences: [1, 1]
     interfaces:
       Standard:
         create:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         delete:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
           TOKEN: { get_property: [SELF, token] }
@@ -700,21 +899,21 @@ node_types:
             TASK_NAME: {get_property: [SELF, task_name]}
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         run:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
+            type: org.lexis.common.ddi.artifacts.Deployment
         cancel:
           implementation:
             file: "embedded"
-            type: org.ddi.artifacts.Deployment
-  org.ddi.nodes.DDIRuntimeToHPCTaskJob:
-    derived_from: org.ddi.nodes.pub.DDIRuntimeToHPCTaskJob
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.DDIRuntimeToHPCTaskJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.DDIRuntimeToHPCTaskJob
     description: >
       Transfer from DDI to HPC staging area, a dataset (or dataset files) selected at runtime
 capability_types:
-  org.ddi.capabilities.DDIAccess:
+  org.lexis.common.ddi.capabilities.DDIAccess:
     derived_from: tosca.capabilities.Root
     description: >
       A capability providing details on the access to DDI
@@ -725,7 +924,7 @@ capability_types:
       sshfs_url:
         type: string
         description: DDI API SSHFS export URL
-  org.ddi.capabilities.DataTransferCloud:
+  org.lexis.common.ddi.capabilities.DataTransferCloud:
     derived_from: tosca.capabilities.Root
     description: >
       A capability provided by a DDI Job performing a data transfer to the cloud staging area
@@ -736,7 +935,7 @@ capability_types:
       destination_path:
         type: string
         description: Path to the data transferred
-  org.ddi.capabilities.DataTransferHPC:
+  org.lexis.common.ddi.capabilities.DataTransferHPC:
     derived_from: tosca.capabilities.Root
     description: >
       A capability provided by a DDI Job performing a data transfer to the HPC
@@ -744,7 +943,7 @@ capability_types:
       destination_path:
         type: string
         description: Path to the dataset transferred
-  org.ddi.capabilities.DataTransferDDI:
+  org.lexis.common.ddi.capabilities.DataTransferDDI:
     derived_from: tosca.capabilities.Root
     description: >
       A capability provided by a DDI Job performing a data transfer to DDI
@@ -752,7 +951,7 @@ capability_types:
       destination_path:
         type: string
         description: Path to the dataset transferred
-  org.ddi.capabilities.DatasetFilesProvider:
+  org.lexis.common.ddi.capabilities.DatasetFilesProvider:
     derived_from: tosca.capabilities.Root
     description: >
       A capability provided by a Job providing details of a dataset and files it contains
@@ -769,7 +968,7 @@ capability_types:
           type: string
         description: |
           Path of dataset files matching the patterns
-  org.ddi.capabilities.CloudStagingAreaAccess:
+  org.lexis.common.ddi.capabilities.CloudStagingAreaAccess:
     derived_from: tosca.capabilities.Root
     description: >
       A capability providing details on the access to Cloud Staging area
@@ -789,12 +988,12 @@ capability_types:
       group_id:
         type: string
         description: ID of the unix group with read/write access to this file system
-  org.ddi.capabilities.DeleteCloudData:
+  org.lexis.common.ddi.capabilities.DeleteCloudData:
     derived_from: tosca.capabilities.Root
     description: >
       A capability fulfilling requirements of a node requiring to be
       associated with a DeleteCloudData Job.
-  org.ddi.capabilities.CloudAreaDirectoryProvider:
+  org.lexis.common.ddi.capabilities.CloudAreaDirectoryProvider:
     derived_from: tosca.capabilities.Root
     description: >
       A capability of a node providing a directory in the Cloud Staging area mounted on a host
@@ -809,28 +1008,32 @@ capability_types:
         type: string
         description: Name of a user having access to files in this directory
 relationship_types:
-  org.ddi.relationships.SameSite:
+  org.lexis.common.ddi.relationships.SameSite:
     derived_from: tosca.relationships.DependsOn
     description: >
       Source must must be on same site as target
     valid_target_types: [ tosca.capabilities.OperatingSystem ]
-  org.ddi.relationships.CloudAreaDirectoryProvider:
+  org.lexis.common.ddi.relationships.CloudAreaDirectoryProvider:
     derived_from: tosca.relationships.DependsOn
     description: >
       Relationship with a provider of dataset
-    valid_target_types: [ org.ddi.capabilities.CloudAreaDirectoryProvider ]
-  org.ddi.relationships.DDIAccessProvider:
+    valid_target_types: [ org.lexis.common.ddi.capabilities.CloudAreaDirectoryProvider ]
+  org.lexis.common.ddi.relationships.DDIAccessProvider:
     derived_from: tosca.relationships.DependsOn
     description: >
       Relationship with a provider of DDI access
-    valid_target_types: [ org.ddi.capabilities.DDIAccess ]
-  org.ddi.relationships.CloudAreaDatasetProvider:
+    valid_target_types: [ org.lexis.common.ddi.capabilities.DDIAccess ]
+  org.lexis.common.ddi.relationships.CloudAreaDatasetProvider:
     derived_from: tosca.relationships.DependsOn
     description: >
       Relationship with a provider of dataset in cloud staging area
-    valid_target_types: [ org.ddi.capabilities.DataTransferCloud ]
-  org.ddi.relationships.DatasetFilesProvider:
+    valid_target_types: [ org.lexis.common.ddi.capabilities.DataTransferCloud ]
+  org.lexis.common.ddi.relationships.DatasetFilesProvider:
     derived_from: tosca.relationships.DependsOn
     description: >
       Relationship with a provider of details on a dataset and its files in DDI
-    valid_target_types: [ org.ddi.capabilities.DatasetFilesProvider ]
+    valid_target_types: [ org.lexis.common.ddi.capabilities.DatasetFilesProvider ]
+  org.lexis.common.ddi.relationships.SendJobOutputsToDDI:
+    derived_from: tosca.relationships.DependsOn
+    description: Relationship with HEAppE job for which to store results in DDI
+    valid_target_types: [ org.lexis.common.heappe.capabilities.HeappeJob ]

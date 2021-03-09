@@ -16,6 +16,7 @@ package job
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -79,17 +80,22 @@ func (e *CloudToDDIJobExecution) submitDataTransferRequest(ctx context.Context) 
 		return err
 	}
 
-	token := e.getValueFromEnvInputs(tokenEnvVar)
-	if token == "" {
-		return errors.Errorf("Failed to get token")
-	}
-
-	sourcePath := e.getValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
+	sourcePath := e.GetValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
 	if sourcePath == "" {
 		return errors.Errorf("Failed to get path of dataset to transfer from Cloud staging area")
 	}
 
-	destPath := e.getValueFromEnvInputs(ddiPathEnvVar)
+	sourceSubDirPath := e.GetValueFromEnvInputs(sourceSubDirEnvVar)
+	if sourceSubDirPath != "" {
+		sourcePath = filepath.Join(sourcePath, sourceSubDirPath)
+	}
+
+	sourceFileName := e.GetValueFromEnvInputs(sourceFileNameEnvVar)
+	if sourceFileName != "" {
+		sourcePath = filepath.Join(sourcePath, sourceFileName)
+	}
+
+	destPath := e.GetValueFromEnvInputs(ddiPathEnvVar)
 	if destPath == "" {
 		return errors.Errorf("Failed to get path of desired transferred dataset in DDI")
 	}
@@ -99,7 +105,7 @@ func (e *CloudToDDIJobExecution) submitDataTransferRequest(ctx context.Context) 
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitCloudToDDIDataTransfer(metadata, token, sourcePath, destPath)
+	requestID, err := ddiClient.SubmitCloudToDDIDataTransfer(metadata, e.Token, sourcePath, destPath)
 	if err != nil {
 		return err
 	}

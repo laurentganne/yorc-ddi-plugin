@@ -82,11 +82,6 @@ func (e *DeleteCloudDataExecution) SubmitCloudStagingAreaDataDeletion(ctx contex
 		return err
 	}
 
-	token := e.getValueFromEnvInputs(tokenEnvVar)
-	if token == "" {
-		return errors.Errorf("Failed to get token")
-	}
-
 	dataPath := e.GetValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
 	if dataPath == "" {
 		return errors.Errorf("Failed to get path of dataset to delete from Cloud storage")
@@ -98,7 +93,7 @@ func (e *DeleteCloudDataExecution) SubmitCloudStagingAreaDataDeletion(ctx contex
 	}
 	log.Printf("Submitting deletion of %s", dataPath)
 
-	requestID, err := ddiClient.SubmitCloudStagingAreaDataDeletion(token, dataPath)
+	requestID, err := ddiClient.SubmitCloudStagingAreaDataDeletion(e.Token, dataPath)
 	if err != nil {
 		return err
 	}

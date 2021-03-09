@@ -63,7 +63,9 @@ func main() {
 		job.EnableCloudAccessAction,
 		job.DisableCloudAccessAction,
 		job.DataTransferAction,
-		job.CloudDataDeleteAction}
+		job.CloudDataDeleteAction,
+		job.WaitForDatasetAction,
+		job.StoreRunningHPCJobFilesToDDIAction}
 	servConfig.ActionFunc = func() prov.ActionOperator {
 		return new(job.ActionOperator)
 	}

@@ -16,6 +16,9 @@ package job
 
 import (
 	"context"
+	"encoding/json"
+	"path"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -25,13 +28,13 @@ import (
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// EnableCloudAccessJobExecution holds Cloud staging area access enablement job Execution properties
-type EnableCloudAccessJobExecution struct {
+// HPCToDDIExecution holds HPC to DDI data transfer job Execution properties
+type HPCToDDIExecution struct {
 	*DDIJobExecution
 }
 
 // Execute executes a synchronous operation
-func (e *EnableCloudAccessJobExecution) Execute(ctx context.Context) error {
+func (e *HPCToDDIExecution) Execute(ctx context.Context) error {
 
 	var err error
 	switch strings.ToLower(e.Operation.Name) {
@@ -46,10 +49,10 @@ func (e *EnableCloudAccessJobExecution) Execute(ctx context.Context) error {
 	case tosca.RunnableSubmitOperationName:
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Submitting data transfer request %q", e.NodeName)
-		err = e.submitEnableCloudAccess(ctx)
+		err = e.submitDataTransferRequest(ctx)
 		if err != nil {
 			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
-				"Failed to submit cloud access enablement for node %q, error %s", e.NodeName, err.Error())
+				"Failed to submit data transfer for node %q, error %s", e.NodeName, err.Error())
 
 		}
 	case tosca.RunnableCancelOperationName:
@@ -72,19 +75,83 @@ func (e *EnableCloudAccessJobExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-func (e *EnableCloudAccessJobExecution) submitEnableCloudAccess(ctx context.Context) error {
+func (e *HPCToDDIExecution) submitDataTransferRequest(ctx context.Context) error {
 
 	ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
 	if err != nil {
 		return err
 	}
 
-	ipAddress := e.GetValueFromEnvInputs(ipAddressEnvVar)
-	if ipAddress == "" {
-		return errors.Errorf("Failed to get ip address for which to enable access to Cloud staging area")
+	ddiPath := e.GetValueFromEnvInputs(ddiPathEnvVar)
+	if ddiPath == "" {
+		return errors.Errorf("Failed to get DDI path")
 	}
 
-	requestID, err := ddiClient.SubmitEnableCloudAccess(e.Token, ipAddress)
+	jobDirPath := e.GetValueFromEnvInputs(hpcDirectoryPathEnvVar)
+	if jobDirPath == "" {
+		return errors.Errorf("Failed to get HPC directory path")
+	}
+
+	serverFQDN := e.GetValueFromEnvInputs(hpcServerEnvVar)
+	if serverFQDN == "" {
+		return errors.Errorf("Failed to get HPC server")
+	}
+
+	res := strings.SplitN(serverFQDN, ".", 2)
+	sourceSystem := res[0] + "_home"
+
+	heappeJobIDStr := e.GetValueFromEnvInputs(heappeJobIDEnvVar)
+	if heappeJobIDStr == "" {
+		return errors.Errorf("Failed to get ID of associated job")
+	}
+	heappeJobID, err := strconv.ParseInt(heappeJobIDStr, 10, 64)
+	if err != nil {
+		err = errors.Wrapf(err, "Unexpected Job ID value %q for deployment %s node %s",
+			heappeJobIDStr, e.DeploymentID, e.NodeName)
+		return err
+	}
+
+	sourcePath := jobDirPath
+	taskName := e.GetValueFromEnvInputs(taskNameEnvVar)
+	strVal := e.GetValueFromEnvInputs(tasksNameIdEnvVar)
+	if strVal == "" {
+		return errors.Errorf("Failed to get map of tasks name-id from associated job")
+	}
+	var tasksNameID map[string]string
+	err = json.Unmarshal([]byte(strVal), &tasksNameID)
+	if err != nil {
+		return errors.Wrapf(err, "Failed to unmarshall map od task name - task id %s", strVal)
+	}
+	var taskIDStr string
+	if taskName != "" {
+		taskIDStr = tasksNameID[taskName]
+		sourcePath = path.Join(jobDirPath, taskIDStr)
+	} else {
+		// just need to define a task ID for the REST request
+		for _, v := range tasksNameID {
+			taskIDStr = v
+			break
+		}
+	}
+	var taskID int64
+	if taskIDStr == "" {
+		return errors.Errorf("Failed to find task %s in associated job", taskName)
+	} else {
+		taskID, err = strconv.ParseInt(taskIDStr, 10, 64)
+		if err != nil {
+			err = errors.Wrapf(err, "Unexpected Task ID ID value %q for deployment %s node %s",
+				taskIDStr, e.DeploymentID, e.NodeName)
+			return err
+		}
+	}
+
+	metadata, err := e.getMetadata(ctx)
+	if err != nil {
+		return err
+	}
+
+	requestID, err := ddiClient.SubmitHPCToDDIDataTransfer(metadata, e.Token, sourceSystem,
+		sourcePath, ddiPath, heappeJobID, taskID)
 	if err != nil {
 		return err
 	}
@@ -93,8 +160,7 @@ func (e *EnableCloudAccessJobExecution) submitEnableCloudAccess(ctx context.Cont
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		requestIDConsulAttribute, requestID)
 	if err != nil {
-		return errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
+		err = errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
 	}
-
 	return err
 }

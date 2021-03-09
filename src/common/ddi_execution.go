@@ -31,6 +31,7 @@ const (
 	// DDIInfrastructureType is the DDI location infrastructure type
 	DDIInfrastructureType            = "ddi"
 	cloudStagingAreaAccessCapability = "cloud_staging_area_access"
+	ddiAccessCapability              = "ddi_access"
 )
 
 // DDIExecution holds DDI Execution properties
@@ -40,6 +41,7 @@ type DDIExecution struct {
 	DeploymentID   string
 	TaskID         string
 	NodeName       string
+	Token          string
 	Operation      prov.Operation
 	EnvInputs      []*operations.EnvInput
 	VarInputsNames []string
@@ -128,4 +130,27 @@ func (e *DDIExecution) SetCloudStagingAreaAccessCapabilityAttributes(ctx context
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		"group_id", cloudAreaProps.GroupID)
 	return err
+}
+
+func (e *DDIExecution) SetDDIAccessCapabilityAttributes(ctx context.Context, ddiClient ddi.Client) error {
+
+	err := deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		ddiAccessCapability, "staging_url", ddiClient.GetStagingURL())
+	if err != nil {
+		return err
+	}
+
+	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		ddiAccessCapability, "sshfs_url", ddiClient.GetSshfsURL())
+	if err != nil {
+		return err
+	}
+	// Adding as well node template attributes
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		"staging_url", ddiClient.GetStagingURL())
+	if err != nil {
+		return err
+	}
+	return deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		"sshfs_url", ddiClient.GetSshfsURL())
 }

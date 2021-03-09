@@ -14,11 +14,6 @@
 
 package ddi
 
-// LocationHPCStagingArea holds properties of a HPC staging area
-type LocationHPCStagingArea struct {
-	Name string `yaml:"name" json:"name"`
-}
-
 // LocationCloudStagingArea holds properties of a HPC staging area
 type LocationCloudStagingArea struct {
 	Name             string `yaml:"name" json:"name"`
@@ -51,6 +46,18 @@ type DataTransferRequest struct {
 	TargetPath   string   `json:"target_path"`
 }
 
+// DataTransferRequestHPCExectension holds additional parameters for data transfers on HPC
+type DataTransferRequestHPCExectension struct {
+	JobID  int64 `json:"job_id"`
+	TaskID int64 `json:"task_id,omitempty"`
+}
+
+// HPCDataTransferRequest holds parameters of a data transfer request
+type HPCDataTransferRequest struct {
+	DataTransferRequest
+	DataTransferRequestHPCExectension
+}
+
 // DeleteDataRequest holds parameters of data to delete
 type DeleteDataRequest struct {
 	TargetSystem string `json:"target_system"`
@@ -66,4 +73,46 @@ type SubmittedRequestInfo struct {
 type RequestStatus struct {
 	Status     string `json:"status"`
 	TargetPath string `json:"target_path,omitempty"`
+}
+
+// DatasetLocation holds location properties of a dataset
+type DatasetLocation struct {
+	InternalID string `json:"internalID"`
+	Access     string `json:"access"`
+	Project    string `json:"project"`
+}
+
+// DatasetSearchResult holds properties of an element of a dataset search result
+type DatasetSearchResult struct {
+	Location DatasetLocation `json:"location"`
+	Metadata Metadata        `json:"metadata"`
+}
+
+// DatasetCreateRequest holds properties of a request to create a dataset
+type DatasetCreateRequest struct {
+	PushMethod string   `json:"push_method"`
+	Access     string   `json:"access"`
+	Project    string   `json:"project,omitempty"`
+	Metadata   Metadata `json:"metadata,omitempty"`
+}
+
+// DatasetCreateResponse holds a dataset creation response
+type DatasetCreateResponse struct {
+	Status     string `json:"status"`
+	InternalID string `json:"internalID"`
+}
+
+// DatasetListingRequest holds properties of a request to list the content of a dataset
+type DatasetListingRequest struct {
+	InternalID string `json:"internalID"`
+	Access     string `json:"access"`
+	Project    string `json:"project"`
+	Recursive  bool   `json:"recursive"`
+}
+
+// DatasetListing holds the listing of a dataset content
+type DatasetListing struct {
+	Name     string            `json:"name"`
+	Type     string            `json:"type"`
+	Contents []*DatasetListing `json:"contents,omitempty"`
 }

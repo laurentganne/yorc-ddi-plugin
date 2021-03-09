@@ -364,6 +364,7 @@ github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q
 github.com/xlab/handysort v0.0.0-20150421192137-fb3537ed64a1/go.mod h1:QcJo0QPSfTONNIgpN5RA8prR7fF8nkF6cTWTcNerRO8=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
 github.com/ystia/tdt2go v0.3.0/go.mod h1:jMICTU+LGFMsG8LxSECoLXoDZoSuA9ofSiqLubtFnK8=
+github.com/ystia/yorc v1.0.0 h1:nD7hDBL/g+W8fSXfuwgm3lJb+W6LJlaiIfF6DTWDSq4=
 github.com/ystia/yorc v3.1.2+incompatible h1:tYG4d+lmeuXncBIFyZUrYbvEnno/NO0tHZg2QrCLHTo=
 github.com/ystia/yorc/v4 v4.0.0-M10 h1:x6UyoA1F1m+BOymMYMWNH6TZt9dMPpbzNqpmnFQ+SJY=
 github.com/ystia/yorc/v4 v4.0.0-M10/go.mod h1:6ChloQIgOAfb0/ikgXRQFbq6Y5rgbvwyammDBx3XPpk=
@@ -372,6 +373,7 @@ github.com/ystia/yorc/v4 v4.0.0-M9/go.mod h1:7l5vjHWqdwMECZJDR+abZecIMF16FqEjoEj
 github.com/ystia/yorc/v4 v4.0.0-rc.1 h1:hnMTWR/L4dLBrafa9HrpMWLKxvFJtMZ76axmfyvKvag=
 github.com/ystia/yorc/v4 v4.0.3 h1:XiIjtQaT80GtpJmFYYACkq9sCizwKDnHCvuU3yMDhTg=
 github.com/ystia/yorc/v4 v4.0.3/go.mod h1:pgwL91KW3Wz34ipjvlmbFgXnfMuQv1siT74y65NmVAk=
+github.com/ystia/yorc/v4 v4.0.4 h1:IYUlWvSO3hq9YTwl5mDdqJpK4UVMctmzhppekgeRmpA=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
 go.uber.org/atomic v1.4.0/go.mod h1:gD2HeocX3+yG+ygLZcrzQJaqmWj9AIm7n08wl/qW/PE=
 go.uber.org/multierr v1.1.0/go.mod h1:wR5kodmAFQ0UK8QlbwjlSNy0Z68gJhDJUG5sjR94q/0=

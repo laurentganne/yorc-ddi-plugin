@@ -28,9 +28,7 @@ import (
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
 	"github.com/ystia/yorc/v4/locations"
-	"github.com/ystia/yorc/v4/log"
 	"github.com/ystia/yorc/v4/prov"
-	"github.com/ystia/yorc/v4/prov/operations"
 	"github.com/ystia/yorc/v4/tosca"
 )
 
@@ -38,15 +36,38 @@ const (
 	installOperation                      = "install"
 	uninstallOperation                    = "uninstall"
 	metadataProperty                      = "metadata"
+	filesPatternProperty                  = "needed_files_patterns"
+	elapsedTimeMinutesProperty            = "last_modification_elapsed_time_minutes"
+	projectProperty                       = "project"
+	taskNameProperty                      = "task_name"
 	requestIDConsulAttribute              = "request_id"
-	destinationDatasetPathConsulAttribute = "destination_directory_path"
-	tokenEnvVar                           = "TOKEN"
+	destinationDatasetPathConsulAttribute = "destination_path"
+	storedFilesConsulAttribute            = "stored_files"
+	toBeStoredFilesConsulAttribute        = "to_be_stored_files"
+	stagingAreaPathConsulAttribute        = "staging_area_directory_path"
+	datasetPathConsulAttribute            = "dataset_path"
+	datasetIDConsulAttribute              = "dataset_id"
+	datasetFilesConsulAttribute           = "dataset_file_paths"
+	fileNameConsulAttribute               = "file_name"
 	ddiDatasetPathEnvVar                  = "DDI_DATASET_PATH"
+	ddiDatasetFilePathsEnvVar             = "DDI_DATASET_FILE_PATHS"
 	ddiPathEnvVar                         = "DDI_PATH"
+	sourceSubDirEnvVar                    = "SOURCE_SUBDIRECTORY"
+	sourceFileNameEnvVar                  = "SOURCE_FILE_NAME"
 	cloudStagingAreaDatasetPathEnvVar     = "CLOUD_STAGING_AREA_DIRECTORY_PATH"
+	timestampCloudStagingAreaDirEnvVar    = "TIMESTAMP_CLOUD_STAGING_AREA_DIRECTORY"
 	hpcDirectoryPathEnvVar                = "HPC_DIRECTORY_PATH"
+	hpcServerEnvVar                       = "HPC_SERVER"
+	heappeJobIDEnvVar                     = "HEAPPE_JOB_ID"
+	tasksNameIdEnvVar                     = "TASKS_NAME_ID"
+	taskNameEnvVar                        = "TASK_NAME"
 	ipAddressEnvVar                       = "IP_ADDRESS"
+	filePatternEnvVar                     = "FILE_PATTERN"
+	jobChangedFilesEnvVar                 = "JOB_CHANGED_FILES"
+	jobStartDataEnvVar                    = "JOB_START_DATE"
+	jobStateEnvVar                        = "JOB_STATE"
 	dataTransferCapability                = "data_transfer"
+	datasetFilesProviderCapability        = "dataset_files"
 )
 
 // DDIJobExecution holds DDI job Execution properties
@@ -67,45 +88,13 @@ func (e *DDIJobExecution) ExecuteAsync(ctx context.Context) (*prov.Action, time.
 		return nil, 0, err
 	}
 
-	token := e.getValueFromEnvInputs(tokenEnvVar)
-	if token == "" {
-		return nil, 0, errors.Errorf("Failed to get token")
-	}
-
 	data := make(map[string]string)
-	data["taskID"] = e.TaskID
-	data["nodeName"] = e.NodeName
-	data["requestID"] = requestID
-	data["token"] = token
+	data[actionDataTaskID] = e.TaskID
+	data[actionDataNodeName] = e.NodeName
+	data[actionDataRequestID] = requestID
+	data[actionDataToken] = e.Token
 
 	return &prov.Action{ActionType: e.ActionType, Data: data}, e.MonitoringTimeInterval, err
-}
-
-// ResolveExecution resolves inputs before the execution of an operation
-func (e *DDIJobExecution) ResolveExecution(ctx context.Context) error {
-	return e.resolveInputs(ctx)
-}
-
-func (e *DDIJobExecution) resolveInputs(ctx context.Context) error {
-	var err error
-	log.Debugf("Get environment inputs for node:%q", e.NodeName)
-	e.EnvInputs, e.VarInputsNames, err = operations.ResolveInputsWithInstances(
-		ctx, e.DeploymentID, e.NodeName, e.TaskID, e.Operation, nil, nil)
-	log.Debugf("Environment inputs: %v", e.EnvInputs)
-	return err
-}
-
-func (e *DDIJobExecution) getValueFromEnvInputs(envVar string) string {
-
-	var result string
-	for _, envInput := range e.EnvInputs {
-		if envInput.Name == envVar {
-			result = envInput.Value
-			break
-		}
-	}
-	return result
-
 }
 
 func (e *DDIJobExecution) getMetadata(ctx context.Context) (ddi.Metadata, error) {

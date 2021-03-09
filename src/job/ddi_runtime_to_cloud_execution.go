@@ -16,8 +16,10 @@ package job
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -29,13 +31,14 @@ import (
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// DDIToCloudExecution holds DDI to Cloud data transfer job Execution properties
-type DDIToCloudExecution struct {
+// DDIRuntimeToCloudExecution holds the properties of a data transfer from DDO to cloud
+// of a dataset (or files in this dataset) determined at runtime
+type DDIRuntimeToCloudExecution struct {
 	*DDIJobExecution
 }
 
 // Execute executes a synchronous operation
-func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
+func (e *DDIRuntimeToCloudExecution) Execute(ctx context.Context) error {
 
 	var err error
 	switch strings.ToLower(e.Operation.Name) {
@@ -76,16 +79,50 @@ func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) error {
+func (e *DDIRuntimeToCloudExecution) submitDataTransferRequest(ctx context.Context) error {
 
 	ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
 	if err != nil {
 		return err
 	}
 
-	sourcePath := e.GetValueFromEnvInputs(ddiDatasetPathEnvVar)
-	if sourcePath == "" {
+	sourceDatasetPath := e.GetValueFromEnvInputs(ddiDatasetPathEnvVar)
+	if sourceDatasetPath == "" {
 		return errors.Errorf("Failed to get path of dataset to transfer from DDI")
+	}
+
+	var sourceFilePath string
+	filePattern := e.GetValueFromEnvInputs(filePatternEnvVar)
+	if filePattern != "" {
+		// Find a file matching this pattern
+		var sourceFilePaths []string
+		sourceFilePathsStr := e.GetValueFromEnvInputs(ddiDatasetFilePathsEnvVar)
+		if sourceFilePathsStr != "" {
+			err = json.Unmarshal([]byte(sourceFilePathsStr), &sourceFilePaths)
+			if err != nil {
+				return errors.Wrapf(err, "Wrong format for lsit o ffile paths %q for deployment %s node %s",
+					sourceFilePathsStr, e.DeploymentID, e.NodeName)
+			}
+		}
+
+		if len(sourceFilePaths) == 0 {
+			return errors.Errorf("No file paths set from associated files provider in source dataset")
+		}
+
+		for _, fpath := range sourceFilePaths {
+			matched, err := regexp.MatchString(filePattern, fpath)
+			if err != nil {
+				return errors.Wrapf(err, "Failed to find matching pattern %s in source files", filePattern)
+			}
+			if matched {
+				sourceFilePath = fpath
+				break
+			}
+		}
+
+		if sourceFilePath == "" {
+			return errors.Errorf("Found no file with pattern %q in source files %+v", filePattern, sourceFilePaths)
+		}
 	}
 
 	destPath := e.GetValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
@@ -95,8 +132,21 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 		destPath = fmt.Sprintf("%s_%d", destPath, time.Now().UnixNano()/1000000)
 	}
 
-	// Add the dataset ID to destPath to get the dataset path in staging area
-	datasetCloudAreaPath := path.Join(destPath, path.Base(sourcePath))
+	var sourcePath string
+	var cloudAreaDirectoryPath string
+	if sourceFilePath != "" {
+		sourcePath = sourceFilePath
+		cloudAreaDirectoryPath = destPath
+		fileName := path.Base(sourcePath)
+		err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+			fileNameConsulAttribute, fileName)
+		if err != nil {
+			return errors.Wrapf(err, "Failed to store %s %s %s value %s", e.DeploymentID, e.NodeName, fileNameConsulAttribute, fileName)
+		}
+	} else {
+		sourcePath = sourceDatasetPath
+		cloudAreaDirectoryPath = path.Join(destPath, path.Base(sourceDatasetPath))
+	}
 
 	metadata, err := e.getMetadata(ctx)
 	if err != nil {
@@ -117,14 +167,14 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 
 	// Store the staging area directory path
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
-		stagingAreaPathConsulAttribute, datasetCloudAreaPath)
+		stagingAreaPathConsulAttribute, cloudAreaDirectoryPath)
 	if err != nil {
-		return errors.Wrapf(err, "Request %s submitted, but failed to store the staging area directory path %s", requestID, destPath)
+		return errors.Wrapf(err, "Request %s submitted, but failed to store the staging area directory path %s", requestID, cloudAreaDirectoryPath)
 	}
 	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
-		dataTransferCapability, stagingAreaPathConsulAttribute, datasetCloudAreaPath)
+		dataTransferCapability, stagingAreaPathConsulAttribute, cloudAreaDirectoryPath)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed to store cloud staging area path capability attribute value %s", destPath)
+		err = errors.Wrapf(err, "Failed to store cloud staging area path capability attribute value %s", cloudAreaDirectoryPath)
 	}
 
 	return err

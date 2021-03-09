@@ -35,35 +35,35 @@ const (
 	associatedComputeInstanceRequirementName = "os"
 )
 
-// CloudStagingAreaExecution holds Cloud staging area Execution properties
-type CloudStagingAreaExecution struct {
+// DDIAccessExecution holds DDI Access Execution properties
+type DDIAccessExecution struct {
 	*common.DDIExecution
 }
 
 // ExecuteAsync is not supported here
-func (e *CloudStagingAreaExecution) ExecuteAsync(ctx context.Context) (*prov.Action, time.Duration, error) {
+func (e *DDIAccessExecution) ExecuteAsync(ctx context.Context) (*prov.Action, time.Duration, error) {
 	return nil, 0, errors.Errorf("Unsupported asynchronous operation %s", e.Operation.Name)
 }
 
 // Execute executes a synchronous operation
-func (e *CloudStagingAreaExecution) Execute(ctx context.Context) error {
+func (e *DDIAccessExecution) Execute(ctx context.Context) error {
 
 	var err error
 	var ddiClient ddi.Client
 	switch strings.ToLower(e.Operation.Name) {
-	case "install", "standard.create":
+	case "install", "standard.create", "standard.start":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating %q", e.NodeName)
 		ddiClient, err = e.getDDIClientFromAssociatedComputeLocation(ctx)
 		if err != nil {
 			return err
 		}
-		err = e.SetCloudStagingAreaAccessCapabilityAttributes(ctx, ddiClient)
+		err = e.SetDDIAccessCapabilityAttributes(ctx, ddiClient)
 	case "uninstall", "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Deleting %q", e.NodeName)
 		// Nothing to do here
-	case "standard.start", "standard.stop":
+	case "standard.stop":
 		// Nothing to do
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Executing operation %s on node %q", e.Operation.Name, e.NodeName)
@@ -76,7 +76,7 @@ func (e *CloudStagingAreaExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-func (e *CloudStagingAreaExecution) getDDIClientFromAssociatedComputeLocation(ctx context.Context) (ddi.Client, error) {
+func (e *DDIAccessExecution) getDDIClientFromAssociatedComputeLocation(ctx context.Context) (ddi.Client, error) {
 	// First get the associated compute node
 	computeNodeName, err := deployments.GetTargetNodeForRequirementByName(ctx,
 		e.DeploymentID, e.NodeName, associatedComputeInstanceRequirementName)
@@ -110,7 +110,7 @@ func (e *CloudStagingAreaExecution) getDDIClientFromAssociatedComputeLocation(ct
 	return ddi.GetClient(locationProps)
 
 }
-func (e *CloudStagingAreaExecution) getDDILocationFromComputeLocation(ctx context.Context,
+func (e *DDIAccessExecution) getDDILocationFromComputeLocation(ctx context.Context,
 	locationMgr locations.Manager, computeLocation string) (config.DynamicMap, error) {
 
 	var locationProps config.DynamicMap

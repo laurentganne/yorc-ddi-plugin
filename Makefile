@@ -23,6 +23,7 @@ build: format
 	@rm -Rf ./build
 	@mkdir ./build
 	@zip -q -r ./build/embeddedResources.zip ./tosca/ddi-types.yaml
+	@mkdir -p ./bin
 	@cat ./build/embeddedResources.zip >> ./bin/ddi-plugin
 	@zip -A ./bin/ddi-plugin > /dev/null
 

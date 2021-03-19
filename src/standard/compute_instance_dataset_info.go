@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/laurentganne/yorc-ddi-plugin/v1/common"
-	"github.com/laurentganne/yorc-ddi-plugin/v1/ddi"
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/events"
@@ -28,30 +27,35 @@ import (
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// DDIAccessExecution holds DDI Access Execution properties
-type DDIAccessExecution struct {
+// ComputeDatasetInfoExecution holds Compute Dataset Info Execution properties
+type ComputeDatasetInfoExecution struct {
 	*common.DDIExecution
 }
 
 // ExecuteAsync is not supported here
-func (e *DDIAccessExecution) ExecuteAsync(ctx context.Context) (*prov.Action, time.Duration, error) {
+func (e *ComputeDatasetInfoExecution) ExecuteAsync(ctx context.Context) (*prov.Action, time.Duration, error) {
 	return nil, 0, errors.Errorf("Unsupported asynchronous operation %s", e.Operation.Name)
 }
 
 // Execute executes a synchronous operation
-func (e *DDIAccessExecution) Execute(ctx context.Context) error {
+func (e *ComputeDatasetInfoExecution) Execute(ctx context.Context) error {
 
 	var err error
-	var ddiClient ddi.Client
 	switch strings.ToLower(e.Operation.Name) {
-	case "install", "standard.create", "standard.start":
+	case "install", "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating %q", e.NodeName)
-		ddiClient, err = e.GetDDIClientFromAssociatedComputeLocation(ctx)
+		ddiClient, err := e.GetDDIClientFromAssociatedComputeLocation(ctx)
 		if err != nil {
 			return err
 		}
-		err = e.SetDDIAccessCapabilityAttributes(ctx, ddiClient)
+		areaName := ddiClient.GetCloudStagingAreaName()
+		err = e.SetDatasetInfoCapabilityLocationsAttribute(ctx, []string{areaName})
+		if err != nil {
+			return err
+		}
+	case "standard.start":
+		err = errors.Errorf("Unsupported operation %s in plugin as it is implemented in an Ansible playbook", e.Operation.Name)
 	case "uninstall", "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Deleting %q", e.NodeName)

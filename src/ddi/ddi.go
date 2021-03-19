@@ -44,18 +44,28 @@ const (
 	TaskStatusMsgSuffixAlreadyEnabled = "IP export is already active"
 	// TaskStatusMsgSuffixAlreadyDisabled is the the prefix used in task failing because the cloud access is already disabled
 	TaskStatusMsgSuffixAlreadyDisabled = "IP not found"
+	// TaskStatusDoneMsg is the message returned when a task is done
+	TaskStatusDoneMsg = "Done"
 
-	enableCloudAccessREST  = "/cloud/add"
-	disableCloudAccessREST = "/cloud/remove"
-	ddiStagingStageREST    = "/stage"
-	ddiStagingDeleteREST   = "/delete"
-	ddiDatasetSearchREST   = "/search/metadata"
-	ddiDatasetListingREST  = "/listing"
+	ReplicationStatusParentDataset        = "Parent dataset. Dataset is replicated"
+	ReplicationStatusReplicaDataset       = "Replica dataset. Dataset is replicated"
+	ReplicationStatusDatasetNotReplicated = "Dataset is not replicated"
+	ReplicationStatusNoSuchDataset        = "Dataset doesn't exist or you don't have permission to access it"
 
-	locationStagingURLPropertyName                       = "staging_url"
-	locationSSHFSURLPropertyName                         = "sshfs_url"
-	locationDatasetURLPropertyName                       = "dataset_url"
-	locationDDIAreaPropertyName                          = "ddi_area"
+	enableCloudAccessREST           = "/cloud/add"
+	disableCloudAccessREST          = "/cloud/remove"
+	ddiStagingStageREST             = "/stage"
+	ddiStagingDeleteREST            = "/delete"
+	ddiStagingReplicationStatusREST = "/replication/status"
+	ddiStagingDatasetInfoREST       = "/data/size"
+	ddiDatasetSearchREST            = "/search/metadata"
+	ddiDatasetListingREST           = "/listing"
+
+	locationStagingURLPropertyName = "staging_url"
+	locationSSHFSURLPropertyName   = "sshfs_url"
+	locationDatasetURLPropertyName = "dataset_url"
+	// LocationDDIAreaPropertyName is the property defining the DDI are name of a DDI location
+	LocationDDIAreaPropertyName                          = "ddi_area"
 	locationCloudStagingAreaNamePropertyName             = "cloud_staging_area_name"
 	locationCloudStagingAreaRemoteFileSystemPropertyName = "cloud_staging_area_remote_file_system"
 	locationCloudStagingAreaMountTypePropertyName        = "cloud_staging_area_mount_type"
@@ -66,25 +76,31 @@ const (
 
 // Client is the client interface to Distrbuted Data Infrastructure (DDI) service
 type Client interface {
-	SubmitEnableCloudAccess(token, ipAddress string) (string, error)
-	SubmitDisableCloudAccess(token, ipAddress string) (string, error)
-	GetEnableCloudAccessRequestStatus(token, requestID string) (string, error)
+	CreateEmptyDatasetInProject(token, project string, metadata Metadata) (string, error)
+	IsAlive() bool
+	ListDataSet(token, datasetID, access, project string, recursive bool) (DatasetListing, error)
 	GetDisableCloudAccessRequestStatus(token, requestID string) (string, error)
-	SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
+	GetEnableCloudAccessRequestStatus(token, requestID string) (string, error)
+	SubmitCloudStagingAreaDataDeletion(token, path string) (string, error)
 	SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error)
+	SubmitDDIDatasetInfoRequest(token, targetSystem, ddiPath string) (string, error)
 	SubmitDDIDataDeletion(token, path string) (string, error)
+	SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
 	SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath string, jobID, taskID int64) (string, error)
 	SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath string, jobID, taskID int64) (string, error)
-	SubmitCloudStagingAreaDataDeletion(token, path string) (string, error)
+	GetCloudStagingAreaProperties() LocationCloudStagingArea
+	GetDDIDatasetInfoRequestStatus(token, requestID string) (string, int, int, error)
 	GetDataTransferRequestStatus(token, requestID string) (string, string, error)
 	GetDeletionRequestStatus(token, requestID string) (string, error)
-	GetCloudStagingAreaProperties() LocationCloudStagingArea
-	GetStagingURL() string
-	GetSshfsURL() string
+	GetCloudStagingAreaName() string
 	GetDatasetURL() string
+	GetDDIAreaName() string
+	GetReplicationStatus(token, targetSystem, targetPath string) (string, error)
+	GetSshfsURL() string
+	GetStagingURL() string
 	SearchDataset(token string, metadata Metadata) ([]DatasetSearchResult, error)
-	CreateEmptyDatasetInProject(token, project string, metadata Metadata) (string, error)
-	ListDataSet(token, datasetID, access, project string, recursive bool) (DatasetListing, error)
+	SubmitEnableCloudAccess(token, ipAddress string) (string, error)
+	SubmitDisableCloudAccess(token, ipAddress string) (string, error)
 }
 
 // GetClient returns a DDI client for a given location
@@ -102,9 +118,9 @@ func GetClient(locationProps config.DynamicMap) (Client, error) {
 	if datasetURL == "" {
 		return nil, errors.Errorf("No %s property defined in DDI location configuration", locationDatasetURLPropertyName)
 	}
-	ddiArea := locationProps.GetString(locationDDIAreaPropertyName)
+	ddiArea := locationProps.GetString(LocationDDIAreaPropertyName)
 	if ddiArea == "" {
-		return nil, errors.Errorf("No %s property defined in DDI location configuration", locationDDIAreaPropertyName)
+		return nil, errors.Errorf("No %s property defined in DDI location configuration", LocationDDIAreaPropertyName)
 	}
 	var cloudStagingArea LocationCloudStagingArea
 	cloudStagingArea.Name = locationProps.GetString(locationCloudStagingAreaNamePropertyName)
@@ -133,6 +149,18 @@ type ddiClient struct {
 	StagingURL        string
 	SshfsURL          string
 	DatasetURL        string
+}
+
+// IsAlive checks if the staging URL is accessible
+func (d *ddiClient) IsAlive() bool {
+
+	response, err := http.Get(d.StagingURL)
+	if err != nil {
+		return false
+	}
+	response.Body.Close()
+
+	return response.StatusCode == 200 || response.StatusCode == 301 || response.StatusCode == 302
 }
 
 // SubmitEnableCloudAccess submits a request to enable the access to the Cloud
@@ -210,6 +238,27 @@ func (d *ddiClient) SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSo
 		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
 	if err != nil {
 		err = errors.Wrapf(err, "Failed to submit DDI %s to Cloud %s data transfer", ddiSourcePath, cloudStagingAreaDestinationPath)
+	}
+
+	return response.RequestID, err
+}
+
+// SubmitDDIDatasetInfoRequest submits request to get the size and number of files of a dataset
+func (d *ddiClient) SubmitDDIDatasetInfoRequest(token, targetSystem, ddiPath string) (string, error) {
+
+	request := DatasetInfoRequest{
+		TargetSystem: targetSystem,
+		TargetPath:   ddiPath,
+	}
+
+	requestStr, _ := json.Marshal(request)
+	log.Debugf("Submitting DDI staging request %s", string(requestStr))
+
+	var response SubmittedRequestInfo
+	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingDatasetInfoREST,
+		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit DDI %s dataset %s info request", targetSystem, ddiPath)
 	}
 
 	return response.RequestID, err
@@ -329,6 +378,19 @@ func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceS
 	return response.RequestID, err
 }
 
+// GetDDIDatasetInfoRequestStatus returns the status of a dataset info request
+func (d *ddiClient) GetDDIDatasetInfoRequestStatus(token, requestID string) (string, int, int, error) {
+
+	var response DatasetInfo
+	err := d.httpStagingClient.doRequest(http.MethodGet, path.Join(ddiStagingDatasetInfoREST, requestID),
+		[]int{http.StatusOK}, token, nil, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit get status for data transfer request %s", requestID)
+	}
+
+	return response.Result, response.Size, response.NumberOfFiles, err
+}
+
 // GetDataTransferRequestStatus returns the status of a data transfer request
 // and the path of the transferred data on the destination
 func (d *ddiClient) GetDataTransferRequestStatus(token, requestID string) (string, string, error) {
@@ -356,13 +418,42 @@ func (d *ddiClient) GetDeletionRequestStatus(token, requestID string) (string, e
 	return response.Status, err
 }
 
+// GetReplicationStatus returns the replication startus of a dataset on a given location
+func (d *ddiClient) GetReplicationStatus(token, targetSystem, targetPath string) (string, error) {
+
+	request := ReplicationStatusRequest{
+		TargetSystem: targetSystem,
+		TargetPath:   targetPath,
+	}
+	var response ReplicationStatusResponse
+	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingReplicationStatusREST,
+		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit replication status request for system %s path %s", targetSystem, targetPath)
+	}
+
+	return response.Status, err
+}
+
 // GetCloudStagingAreaProperties returns properties of a Cloud Staging Area
 func (d *ddiClient) GetCloudStagingAreaProperties() LocationCloudStagingArea {
 
 	return d.cloudStagingArea
 }
 
-// GetURL returns the DDI API URL
+// GetDDIAreaName returns the DDI area name
+func (d *ddiClient) GetDDIAreaName() string {
+
+	return d.ddiArea
+}
+
+// GetCloudStagingAreaName returns the DDI cloud staging area name
+func (d *ddiClient) GetCloudStagingAreaName() string {
+
+	return d.cloudStagingArea.Name
+}
+
+// GetStagingURL returns the DDI API URL
 func (d *ddiClient) GetStagingURL() string {
 
 	return d.StagingURL

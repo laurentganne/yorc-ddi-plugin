@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/laurentganne/yorc-ddi-plugin/v1/common"
 	"github.com/laurentganne/yorc-ddi-plugin/v1/ddi"
 
 	"github.com/pkg/errors"
@@ -46,6 +47,8 @@ const (
 	DataTransferAction = "transfer-request-monitoring"
 	// CloudDataDeleteAction is the action of deleting a dataset from Cloud storage
 	CloudDataDeleteAction = "cloud-data-delete-monitoring"
+	// GetDDIDatasetInfoAction is the action of getting info on a dataset (size, number of files)
+	GetDDIDatasetInfoAction = "get-ddi-dataset-info-monitoring"
 	// WaitForDatasetAction is the action of waiting for a dataset to appear in DDI
 	WaitForDatasetAction = "wait-for-dataset"
 	// StoreRunningHPCJobFilesToDDIAction is the action of storing files created/updated
@@ -106,7 +109,8 @@ func (o *ActionOperator) ExecAction(ctx context.Context, cfg config.Configuratio
 	var deregister bool
 	var err error
 	if action.ActionType == DataTransferAction || action.ActionType == CloudDataDeleteAction ||
-		action.ActionType == EnableCloudAccessAction || action.ActionType == DisableCloudAccessAction {
+		action.ActionType == EnableCloudAccessAction || action.ActionType == DisableCloudAccessAction ||
+		action.ActionType == GetDDIDatasetInfoAction {
 		deregister, err = o.monitorJob(ctx, cfg, deploymentID, action)
 	} else if action.ActionType == WaitForDatasetAction {
 		deregister, err = o.monitorDataset(ctx, cfg, deploymentID, action)
@@ -138,6 +142,8 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 
 	var status string
 	var targetPath string
+	var size int
+	var numberOfFiles int
 	switch action.ActionType {
 	case EnableCloudAccessAction:
 		status, err = ddiClient.GetEnableCloudAccessRequestStatus(actionData.token, requestID)
@@ -147,6 +153,8 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 		status, targetPath, err = ddiClient.GetDataTransferRequestStatus(actionData.token, requestID)
 	case CloudDataDeleteAction:
 		status, err = ddiClient.GetDeletionRequestStatus(actionData.token, requestID)
+	case GetDDIDatasetInfoAction:
+		status, size, numberOfFiles, err = ddiClient.GetDDIDatasetInfoRequestStatus(actionData.token, requestID)
 	default:
 		err = errors.Errorf("Unsupported action %s", action.ActionType)
 	}
@@ -168,6 +176,8 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 	case status == ddi.TaskStatusCloudAccessEnabledMsg:
 		requestStatus = requestStatusCompleted
 	case status == ddi.TaskStatusDisabledMsg:
+		requestStatus = requestStatusCompleted
+	case status == ddi.TaskStatusDoneMsg:
 		requestStatus = requestStatusCompleted
 	case strings.HasPrefix(status, ddi.TaskStatusFailureMsgPrefix):
 		if strings.HasSuffix(status, ddi.TaskStatusMsgSuffixAlreadyEnabled) {
@@ -214,6 +224,20 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 				dataTransferCapability, destinationDatasetPathConsulAttribute, destPath)
 			if err != nil {
 				return false, errors.Wrapf(err, "Failed to store DDI dataset path capability attribute value %s", destPath)
+			}
+		} else if action.ActionType == GetDDIDatasetInfoAction {
+			// Store dataset info
+			e := common.DDIExecution{
+				DeploymentID: deploymentID,
+				NodeName:     actionData.nodeName,
+			}
+			err = e.SetDatasetInfoCapabilitySizeAttribute(ctx, size)
+			if err != nil {
+				return false, err
+			}
+			err = e.SetDatasetInfoCapabilityNumberOfFilesAttribute(ctx, numberOfFiles)
+			if err != nil {
+				return false, err
 			}
 		}
 

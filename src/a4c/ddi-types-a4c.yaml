@@ -155,10 +155,6 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-        cancel:
-          implementation:
-            file: ddi-types-a4c.yaml
-            type: yorc.artifacts.Deployment.SlurmJob
   org.lexis.common.ddi.nodes.DisableCloudStagingAreaAccessJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     description: >
@@ -199,10 +195,6 @@ node_types:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
         run:
-          implementation:
-            file: ddi-types-a4c.yaml
-            type: yorc.artifacts.Deployment.SlurmJob
-        cancel:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -267,10 +259,6 @@ node_types:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
         run:
-          implementation:
-            file: ddi-types-a4c.yaml
-            type: yorc.artifacts.Deployment.SlurmJob
-        cancel:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -346,10 +334,6 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-        cancel:
-          implementation:
-            file: ddi-types-a4c.yaml
-            type: yorc.artifacts.Deployment.SlurmJob
   org.lexis.common.ddi.nodes.CloudToDDIJob:
     derived_from: org.lexis.common.ddi.nodes.pub.CloudToDDIJob
     description: >
@@ -397,10 +381,6 @@ node_types:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
         run:
-          implementation:
-            file: ddi-types-a4c.yaml
-            type: yorc.artifacts.Deployment.SlurmJob
-        cancel:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -475,10 +455,6 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-        cancel:
-          implementation:
-            file: ddi-types-a4c.yaml
-            type: yorc.artifacts.Deployment.SlurmJob
   org.lexis.common.ddi.nodes.DDIToHPCTaskJob:
     derived_from: org.lexis.common.ddi.nodes.pub.DDIToHPCTaskJob
     description: >
@@ -547,10 +523,6 @@ node_types:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
         run:
-          implementation:
-            file: ddi-types-a4c.yaml
-            type: yorc.artifacts.Deployment.SlurmJob
-        cancel:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -638,10 +610,6 @@ node_types:
             JOB_CHANGED_FILES: {get_attribute: [REQ_TARGET, job, changed_files]}
             JOB_START_DATE: {get_attribute: [REQ_TARGET, job, start_date]}
             JOB_STATE: {get_attribute: [REQ_TARGET, job, state]}
-          implementation:
-            file: ddi-types-a4c.yaml
-            type: yorc.artifacts.Deployment.SlurmJob
-        cancel:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -736,10 +704,6 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-        cancel:
-          implementation:
-            file: ddi-types-a4c.yaml
-            type: yorc.artifacts.Deployment.SlurmJob
   org.lexis.common.ddi.nodes.WaitForDDIDatasetJob:
     derived_from: org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob
     description: >
@@ -817,10 +781,6 @@ node_types:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
         run:
-          implementation:
-            file: ddi-types-a4c.yaml
-            type: yorc.artifacts.Deployment.SlurmJob
-        cancel:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -902,14 +862,114 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-        cancel:
-          implementation:
-            file: ddi-types-a4c.yaml
-            type: yorc.artifacts.Deployment.SlurmJob
   org.lexis.common.ddi.nodes.DDIRuntimeToHPCTaskJob:
     derived_from: org.lexis.common.ddi.nodes.pub.DDIRuntimeToHPCTaskJob
     description: >
       Transfer from DDI to HPC staging area, a dataset (or one dataset file) selected at runtime
+  org.lexis.common.ddi.nodes.pub.GetDatasetInfo:
+    derived_from: tosca.nodes.Root
+    description: >
+      Get dataset info (abstract)
+    abstract: true
+    attributes:
+      locations:
+        type: list
+        entry_schema:
+          type: string
+        description: Locations of the dataset
+      number_of_files:
+        type: string
+        description: Number of files in the dataset
+      size:
+        type: string
+        description: Size of the dataset in bytes
+    capabilities:
+      dataset_info:
+        type: org.lexis.common.ddi.capabilities.DatasetInfo
+  org.lexis.common.ddi.nodes.GetDDIDatasetInfoJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.GetDatasetInfo
+    description: >
+      Get DDI dataset info
+    properties:
+      token:
+        description: Access token
+        type: string
+        required: true
+      dataset_path:
+        type: string
+        description: Path of the dataset in DDI
+        required: true
+    attributes:
+      request_id:
+        type: string
+    interfaces:
+      tosca.interfaces.node.lifecycle.Runnable:
+        inputs:
+          TOKEN: { get_property: [SELF, token] }
+        submit:
+          inputs:
+            DDI_DATASET_PATH: { get_property: [SELF, dataset_path] }
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+        run:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+  org.lexis.common.ddi.nodes.GetComputeInstanceDatasetInfo:
+    derived_from: org.lexis.common.ddi.nodes.pub.GetDatasetInfo
+    description: >
+      Get Info on a directory that can be accessed from a cloud compute instance
+    properties:
+      dataset_path:
+        description: Directory path
+        type: string
+        required: false
+    requirements:
+      - host:
+          capability: tosca.capabilities.Container
+          node: tosca.nodes.Compute
+          relationship: tosca.relationships.HostedOn
+    attributes:
+      number_of_files: {get_operation_output: [SELF, Standard, start, NUMBER_OF_FILES]}
+      size: {get_operation_output: [SELF, Standard, start, SIZE]}
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+        start:
+          inputs:
+            DATASET_PATH: {get_property: [SELF, dataset_path]}
+          implementation:
+            file: playbooks/get_dataset_info.yaml
+  org.lexis.common.ddi.nodes.GetHPCJobDatasetInfo:
+    derived_from: org.lexis.common.ddi.nodes.pub.GetDatasetInfo
+    description: >
+      Get Info on a HPC job dataset
+    properties:
+      task_name:
+        description: Name of the task for which to get files. If not set, all tasks files are considered.
+        type: string
+        required: false
+    requirements:
+      - job:
+          capability: org.lexis.common.heappe.capabilities.HeappeJob
+          node: org.lexis.common.heappe.nodes.Job
+          relationship: org.lexis.common.heappe.relationships.SendInputsToJob
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        start:
+          inputs:
+            CHANGED_FILES: {get_attribute: [REQ_TARGET, job, changed_files]}
+            HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
+            TASK_NAME: {get_property: [SELF, task_name]}
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
 capability_types:
   org.lexis.common.ddi.capabilities.DDIAccess:
     derived_from: tosca.capabilities.Root
@@ -1003,6 +1063,22 @@ capability_types:
       user_name:
         type: string
         description: Name of a user having access to files in this directory
+  org.lexis.common.ddi.capabilities.DatasetInfo:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability of a node providing info on a dataset
+    attributes:
+      locations:
+        type: list
+        entry_schema:
+          type: string
+        description: Locations of the dataset
+      number_of_files:
+        type: string
+        description: Number of files in the dataset
+      size:
+        type: string
+        description: Size of the dataset in bytes
 relationship_types:
   org.lexis.common.ddi.relationships.SameSite:
     derived_from: tosca.relationships.DependsOn
@@ -1033,3 +1109,8 @@ relationship_types:
     derived_from: tosca.relationships.DependsOn
     description: Relationship with HEAppE job for which to store results in DDI
     valid_target_types: [ org.lexis.common.heappe.capabilities.HeappeJob ]
+  org.lexis.common.ddi.relationships.DatasetInfoProvider:
+    derived_from: tosca.relationships.DependsOn
+    description: >
+      Relationship with a provider of DDI access
+    valid_target_types: [ org.lexis.common.ddi.capabilities.DatasetInfo ]

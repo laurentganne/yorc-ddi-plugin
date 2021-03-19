@@ -16,22 +16,36 @@ package common
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/laurentganne/yorc-ddi-plugin/v1/ddi"
 
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
+	"github.com/ystia/yorc/v4/locations"
 	"github.com/ystia/yorc/v4/log"
 	"github.com/ystia/yorc/v4/prov"
 	"github.com/ystia/yorc/v4/prov/operations"
+	"github.com/ystia/yorc/v4/tosca"
 )
 
 const (
 	// DDIInfrastructureType is the DDI location infrastructure type
-	DDIInfrastructureType            = "ddi"
-	cloudStagingAreaAccessCapability = "cloud_staging_area_access"
-	ddiAccessCapability              = "ddi_access"
+	DDIInfrastructureType = "ddi"
+	// DatasetInfoCapability is the capability of a component providing info on a dataset
+	DatasetInfoCapability = "dataset_info"
+	// DatasetInfoLocations is an attribute providing the list of DDI areas where the
+	// dataset is available
+	DatasetInfoLocations = "locations"
+	// DatasetInfoLocations is an attribute providing the number of files in a dataset
+	DatasetInfoNumberOfFiles = "number_of_files"
+	// DatasetInfoLocations is an attribute providing the size in bytes of a dataset
+	DatasetInfoSize                          = "size"
+	associatedComputeInstanceRequirementName = "os"
+	cloudStagingAreaAccessCapability         = "cloud_staging_area_access"
+	ddiAccessCapability                      = "ddi_access"
 )
 
 // DDIExecution holds DDI Execution properties
@@ -153,4 +167,113 @@ func (e *DDIExecution) SetDDIAccessCapabilityAttributes(ctx context.Context, ddi
 	}
 	return deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		"sshfs_url", ddiClient.GetSshfsURL())
+}
+
+func (e *DDIExecution) SetDatasetInfoCapabilityLocationsAttribute(ctx context.Context, locationNames []string) error {
+
+	err := deployments.SetCapabilityAttributeComplexForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		DatasetInfoCapability, DatasetInfoLocations, locationNames)
+	if err != nil {
+		return err
+	}
+
+	// Adding as well node template attributes
+	err = deployments.SetAttributeComplexForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		DatasetInfoLocations, locationNames)
+	return err
+}
+
+func (e *DDIExecution) SetDatasetInfoCapabilitySizeAttribute(ctx context.Context, size int) error {
+
+	sizeStr := strconv.Itoa(size)
+	err := deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		DatasetInfoCapability, DatasetInfoSize, sizeStr)
+	if err != nil {
+		return err
+	}
+
+	// Adding as well node template attributes
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		DatasetInfoSize, sizeStr)
+	return err
+}
+
+func (e *DDIExecution) SetDatasetInfoCapabilityNumberOfFilesAttribute(ctx context.Context, filesNumber int) error {
+
+	nStr := strconv.Itoa(filesNumber)
+	err := deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		DatasetInfoCapability, DatasetInfoNumberOfFiles, nStr)
+	if err != nil {
+		return err
+	}
+
+	// Adding as well node template attributes
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		DatasetInfoNumberOfFiles, nStr)
+	return err
+}
+
+// GetDDIClientFromAssociatedComputeLocation gets a DDI client corresponding to the location
+// on which the associated compute instance is running
+func (e *DDIExecution) GetDDIClientFromAssociatedComputeLocation(ctx context.Context) (ddi.Client, error) {
+	// First get the associated compute node
+	computeNodeName, err := deployments.GetTargetNodeForRequirementByName(ctx,
+		e.DeploymentID, e.NodeName, associatedComputeInstanceRequirementName)
+	if err != nil {
+		return nil, err
+	}
+
+	locationMgr, err := locations.GetManager(e.Cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	var locationProps config.DynamicMap
+	found, locationName, err := deployments.GetNodeMetadata(ctx, e.DeploymentID,
+		computeNodeName, tosca.MetadataLocationNameKey)
+	if err != nil {
+		return nil, err
+	}
+
+	if found {
+		locationProps, err = e.GetDDILocationFromComputeLocation(ctx, locationMgr, locationName)
+	} else {
+		locationProps, err = locationMgr.GetLocationPropertiesForNode(ctx, e.DeploymentID,
+			e.NodeName, DDIInfrastructureType)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return ddi.GetClient(locationProps)
+
+}
+
+// GetDDILocationFromComputeLocation gets the DDI location
+// for the location on which the associated compute instance is running
+func (e *DDIExecution) GetDDILocationFromComputeLocation(ctx context.Context,
+	locationMgr locations.Manager, computeLocation string) (config.DynamicMap, error) {
+
+	var locationProps config.DynamicMap
+
+	// Convention: the last 3 letters of this location identiy the datacenter
+	dcID := strings.ToLower(computeLocation[(len(computeLocation) - 3):])
+	locations, err := locationMgr.GetLocations()
+	if err != nil {
+		return locationProps, err
+	}
+
+	for _, loc := range locations {
+		if loc.Type == DDIInfrastructureType && strings.HasSuffix(strings.ToLower(loc.Name), dcID) {
+			locationProps, err := locationMgr.GetLocationProperties(loc.Name, DDIInfrastructureType)
+			return locationProps, err
+		}
+	}
+
+	// No such location found, returning the default location
+	locationProps, err = locationMgr.GetLocationPropertiesForNode(ctx,
+		e.DeploymentID, e.NodeName, DDIInfrastructureType)
+	return locationProps, err
+
 }

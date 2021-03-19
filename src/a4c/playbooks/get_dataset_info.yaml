@@ -1,0 +1,41 @@
+- name: Copy number of files and size of directory
+  hosts: all
+  strategy: free
+  become: true
+  become_method: sudo
+  tasks:
+    - name: Get destination directory
+      set_fact:
+        DIRECTORY_ABSOLUTE_PATH: "{{ destination_directory }}/{{ destination_subdirectory }}"
+    - name: "Create destination directory {{ DIRECTORY_ABSOLUTE_PATH }}"
+      file:
+        path: "{{ DIRECTORY_ABSOLUTE_PATH }}"
+        state: directory
+        recurse: yes
+        mode: 0744
+    - name: "Get source files to copy"
+      set_fact:
+        patterns: "{{ source_files | from_json }}"
+    - name: "Copying source directory {{ source_directory }} content to staging area"
+      command: "/bin/cp -R {{ source_directory }}/. {{ DIRECTORY_ABSOLUTE_PATH }}"
+      when: patterns | length == 0
+    - name: "Copying source files to staging area"
+      shell: "/bin/cp {{ source_directory }}/{{ item }} {{ DIRECTORY_ABSOLUTE_PATH }}"
+      with_items: "{{ patterns }}"
+      when: patterns | length > 0
+    - name: Find all files
+      find:
+        paths: "{{ DATASET_PATH }}"
+        recurse: yes
+        file_type: file
+      register: all_files
+    - name: Get number of files
+      set_fact:
+        NUMBER_OF_FILES: "{{ all_files.matched }}"
+    - name: Get dataset size in bytes
+      command: du -s "{{ DATASET_PATH }}"
+      register: du_result
+    - name: Export this size as an operation output
+      set_fact:
+        SIZE: "{{ du_result.stdout.split()[0] }}"
+

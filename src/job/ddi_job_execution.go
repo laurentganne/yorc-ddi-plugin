@@ -27,6 +27,7 @@ import (
 
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
+	"github.com/ystia/yorc/v4/events"
 	"github.com/ystia/yorc/v4/locations"
 	"github.com/ystia/yorc/v4/prov"
 	"github.com/ystia/yorc/v4/tosca"
@@ -141,6 +142,37 @@ func (e *DDIJobExecution) setCloudStagingAreaAccessDetails(ctx context.Context) 
 	return e.SetCloudStagingAreaAccessCapabilityAttributes(ctx, ddiClient)
 }
 
+func (e *DDIJobExecution) getDDIAreaNames(ctx context.Context) ([]string, error) {
+
+	var ddiAreaNames []string
+	locationMgr, err := locations.GetManager(e.Cfg)
+	if err != nil {
+		return ddiAreaNames, err
+	}
+
+	locations, err := locationMgr.GetLocations()
+	if err != nil {
+		return ddiAreaNames, err
+	}
+
+	for _, loc := range locations {
+		if loc.Type == common.DDIInfrastructureType {
+			locationProps, err := locationMgr.GetLocationProperties(loc.Name, common.DDIInfrastructureType)
+			if err != nil {
+				return ddiAreaNames, err
+			}
+			ddiArea := locationProps.GetString(ddi.LocationDDIAreaPropertyName)
+			if ddiArea == "" {
+				return ddiAreaNames, errors.Errorf("No %s property defined in DDI location configuration", ddi.LocationDDIAreaPropertyName)
+			}
+
+			ddiAreaNames = append(ddiAreaNames, ddiArea)
+		}
+	}
+
+	return ddiAreaNames, err
+}
+
 func getDDIClient(ctx context.Context, cfg config.Configuration, deploymentID, nodeName string) (ddi.Client, error) {
 	locationMgr, err := locations.GetManager(cfg)
 	if err != nil {
@@ -154,4 +186,49 @@ func getDDIClient(ctx context.Context, cfg config.Configuration, deploymentID, n
 	}
 
 	return ddi.GetClient(locationProps)
+}
+
+func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deploymentID, nodeName string) (ddi.Client, error) {
+
+	// First get the first location provided for this node
+	ddiClient, err := getDDIClient(ctx, cfg, deploymentID, nodeName)
+	if err != nil {
+		return ddiClient, err
+	}
+
+	if ddiClient.IsAlive() {
+		return ddiClient, err
+	}
+
+	locationMgr, err := locations.GetManager(cfg)
+	if err != nil {
+		return ddiClient, err
+	}
+
+	// Get the first DDI client alive
+	locations, err := locationMgr.GetLocations()
+	if err != nil {
+		return ddiClient, err
+	}
+
+	for _, loc := range locations {
+		if loc.Type == common.DDIInfrastructureType {
+			locationProps, err := locationMgr.GetLocationProperties(loc.Name, common.DDIInfrastructureType)
+			if err != nil {
+				return ddiClient, err
+			}
+			ddiClient, err = ddi.GetClient(locationProps)
+			if err != nil {
+				return ddiClient, err
+			}
+			if ddiClient.IsAlive() {
+				return ddiClient, err
+			} else {
+				events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelWARN, deploymentID).Registerf(
+					"DDI location %q is unreachable", loc.Name)
+			}
+		}
+	}
+
+	return ddiClient, errors.Errorf("Found no DDI location currently reachable")
 }

@@ -41,7 +41,7 @@ const (
 	// DatasetInfoLocations is an attribute providing the number of files in a dataset
 	DatasetInfoNumberOfFiles = "number_of_files"
 	// DatasetInfoLocations is an attribute providing the number of small files in a dataset (<= 32MB)
-	DatasetInfoNumberOfSmallFiles = "number_of_files"
+	DatasetInfoNumberOfSmallFiles = "number_of_small_files"
 	// DatasetInfoLocations is an attribute providing the size in bytes of a dataset
 	DatasetInfoSize                          = "size"
 	associatedComputeInstanceRequirementName = "os"

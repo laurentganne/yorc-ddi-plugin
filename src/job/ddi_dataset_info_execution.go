@@ -65,7 +65,14 @@ func (e *DDIDatasetInfoExecution) Execute(ctx context.Context) error {
 
 func (e *DDIDatasetInfoExecution) submitDatasetInfoRequest(ctx context.Context) error {
 
-	ddiClient, err := getDDIClientAlive(ctx, e.Cfg, e.DeploymentID, e.NodeName)
+	ddiClient, locationName, err := getDDIClientAlive(ctx, e.Cfg, e.DeploymentID, e.NodeName)
+	if err != nil {
+		return err
+	}
+
+	// Store the location of this DDI client in node metadata to re-use the same client
+	// when monitoring the request
+	err = setNodeMetadataLocation(ctx, e.Cfg, e.DeploymentID, e.NodeName, locationName)
 	if err != nil {
 		return err
 	}

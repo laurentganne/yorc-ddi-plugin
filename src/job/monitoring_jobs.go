@@ -142,8 +142,9 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 
 	var status string
 	var targetPath string
-	var size int
-	var numberOfFiles int
+	var size string
+	var numberOfFiles string
+	var numberOfSmallFiles string
 	switch action.ActionType {
 	case EnableCloudAccessAction:
 		status, err = ddiClient.GetEnableCloudAccessRequestStatus(actionData.token, requestID)
@@ -154,7 +155,7 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 	case CloudDataDeleteAction:
 		status, err = ddiClient.GetDeletionRequestStatus(actionData.token, requestID)
 	case GetDDIDatasetInfoAction:
-		status, size, numberOfFiles, err = ddiClient.GetDDIDatasetInfoRequestStatus(actionData.token, requestID)
+		status, size, numberOfFiles, numberOfSmallFiles, err = ddiClient.GetDDIDatasetInfoRequestStatus(actionData.token, requestID)
 	default:
 		err = errors.Errorf("Unsupported action %s", action.ActionType)
 	}
@@ -239,6 +240,11 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 			if err != nil {
 				return false, err
 			}
+			err = e.SetDatasetInfoCapabilityNumberOfSmallFilesAttribute(ctx, numberOfSmallFiles)
+			if err != nil {
+				return false, err
+			}
+
 		}
 
 		// job has been done successfully : unregister monitoring

@@ -892,6 +892,9 @@ node_types:
       number_of_files:
         type: string
         description: Number of files in the dataset
+      number_of_small_files:
+        type: string
+        description: Number of small files in the dataset (<= 32MB)
       size:
         type: string
         description: Size of the dataset in bytes
@@ -944,6 +947,7 @@ node_types:
           relationship: tosca.relationships.HostedOn
     attributes:
       number_of_files: {get_operation_output: [SELF, Standard, start, NUMBER_OF_FILES]}
+      number_of_small_files: {get_operation_output: [SELF, Standard, start, NUMBER_OF_SMALL_FILES]}
       size: {get_operation_output: [SELF, Standard, start, SIZE]}
     capabilities:
       dataset_info:
@@ -1098,6 +1102,9 @@ capability_types:
       number_of_files:
         type: string
         description: Number of files in the dataset
+      number_of_small_files:
+        type: string
+        description: Number of small files in the dataset (<= 32MB)
       size:
         type: string
         description: Size of the dataset in bytes

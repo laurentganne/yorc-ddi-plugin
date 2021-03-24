@@ -36,7 +36,6 @@ const (
 	locationDefaultMonitoringTimeInterval   = 5 * time.Second
 	ddiAccessComponentType                  = "org.lexis.common.ddi.nodes.DDIAccess"
 	computeInstanceDatasetInfoComponentType = "org.lexis.common.ddi.nodes.GetComputeInstanceDatasetInfo"
-	ddiDatasetInfoComponentType             = "org.lexis.common.ddi.nodes.GetDDIDatasetInfo"
 	enableCloudStagingAreaJobType           = "org.lexis.common.ddi.nodes.EnableCloudStagingAreaAccessJob"
 	disableCloudStagingAreaJobType          = "org.lexis.common.ddi.nodes.DisableCloudStagingAreaAccessJob"
 	ddiToCloudJobType                       = "org.lexis.common.ddi.nodes.DDIToCloudJob"
@@ -48,6 +47,7 @@ const (
 	waitForDDIDatasetJobType                = "org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob"
 	storeRunningHPCJobType                  = "org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob"
 	deleteCloudDataJobType                  = "org.lexis.common.ddi.nodes.DeleteCloudDataJob"
+	getDDIDatasetInfoJobType                = "org.lexis.common.ddi.nodes.GetDDIDatasetInfoJob"
 )
 
 // Execution is the interface holding functions to execute an operation
@@ -130,6 +130,31 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	if token == "" {
 		return exec, errors.Errorf("No value provided for deployement %s node %s proerty token", deploymentID, nodeName)
 	}
+
+	isDDIDatasetInfoJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, getDDIDatasetInfoJobType)
+	if err != nil {
+		return exec, err
+	}
+	if isDDIDatasetInfoJob {
+		exec = &job.DDIDatasetInfoExecution{
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Token:        token,
+					Operation:    operation,
+				},
+				ActionType:             job.GetDDIDatasetInfoAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
+		}
+
+		return exec, exec.ResolveExecution(ctx)
+	}
+
 	isDeleteCloudDataJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, deleteCloudDataJobType)
 	if err != nil {
 		return exec, err

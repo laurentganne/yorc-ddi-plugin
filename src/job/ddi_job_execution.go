@@ -17,6 +17,7 @@ package job
 import (
 	"context"
 	"encoding/json"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -28,8 +29,11 @@ import (
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
 	"github.com/ystia/yorc/v4/events"
+	"github.com/ystia/yorc/v4/helper/consulutil"
 	"github.com/ystia/yorc/v4/locations"
 	"github.com/ystia/yorc/v4/prov"
+	"github.com/ystia/yorc/v4/storage"
+	storageTypes "github.com/ystia/yorc/v4/storage/types"
 	"github.com/ystia/yorc/v4/tosca"
 )
 
@@ -188,41 +192,54 @@ func getDDIClient(ctx context.Context, cfg config.Configuration, deploymentID, n
 	return ddi.GetClient(locationProps)
 }
 
-func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deploymentID, nodeName string) (ddi.Client, error) {
+func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deploymentID, nodeName string) (ddi.Client, string, error) {
 
-	// First get the first location provided for this node
-	ddiClient, err := getDDIClient(ctx, cfg, deploymentID, nodeName)
+	// First attempt to get the location defined in node metadata if any
+	var ddiClient ddi.Client
+	var locationName string
+	found, locationName, err := deployments.GetNodeMetadata(ctx, deploymentID, nodeName, tosca.MetadataLocationNameKey)
 	if err != nil {
-		return ddiClient, err
-	}
-
-	if ddiClient.IsAlive() {
-		return ddiClient, err
+		return ddiClient, locationName, err
 	}
 
 	locationMgr, err := locations.GetManager(cfg)
 	if err != nil {
-		return ddiClient, err
+		return ddiClient, locationName, err
+	}
+
+	if found {
+		// Check if the corresponding DDI client is alive
+		locationProps, err := locationMgr.GetLocationProperties(locationName, common.DDIInfrastructureType)
+		if err != nil {
+			return ddiClient, locationName, err
+		}
+		ddiClient, err = ddi.GetClient(locationProps)
+		if err != nil {
+			return ddiClient, locationName, err
+		}
+		if ddiClient.IsAlive() {
+			return ddiClient, locationName, err
+		}
 	}
 
 	// Get the first DDI client alive
 	locations, err := locationMgr.GetLocations()
 	if err != nil {
-		return ddiClient, err
+		return ddiClient, locationName, err
 	}
-
 	for _, loc := range locations {
 		if loc.Type == common.DDIInfrastructureType {
 			locationProps, err := locationMgr.GetLocationProperties(loc.Name, common.DDIInfrastructureType)
 			if err != nil {
-				return ddiClient, err
+				return ddiClient, locationName, err
 			}
 			ddiClient, err = ddi.GetClient(locationProps)
 			if err != nil {
-				return ddiClient, err
+				return ddiClient, locationName, err
 			}
 			if ddiClient.IsAlive() {
-				return ddiClient, err
+				locationName = loc.Name
+				return ddiClient, locationName, err
 			} else {
 				events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelWARN, deploymentID).Registerf(
 					"DDI location %q is unreachable", loc.Name)
@@ -230,5 +247,37 @@ func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deployment
 		}
 	}
 
-	return ddiClient, errors.Errorf("Found no DDI location currently reachable")
+	return ddiClient, locationName, errors.Errorf("Found no DDI location currently reachable")
+}
+
+func setNodeMetadataLocation(ctx context.Context, cfg config.Configuration, deploymentID, nodeName, locationName string) error {
+	nodeTemplate, err := getStoredNodeTemplate(ctx, deploymentID, nodeName)
+	if err != nil {
+		return err
+	}
+	// Add the new location in this node template metadata
+	if nodeTemplate.Metadata == nil {
+		nodeTemplate.Metadata = make(map[string]string)
+	}
+	nodeTemplate.Metadata[tosca.MetadataLocationNameKey] = locationName
+	// Location is now changed for this node template, storing it
+	err = storeNodeTemplate(ctx, deploymentID, nodeName, nodeTemplate)
+	return err
+}
+
+// getStoredNodeTemplate returns the description of a node stored by Yorc
+func getStoredNodeTemplate(ctx context.Context, deploymentID, nodeName string) (*tosca.NodeTemplate, error) {
+	node := new(tosca.NodeTemplate)
+	nodePath := path.Join(consulutil.DeploymentKVPrefix, deploymentID, "topology", "nodes", nodeName)
+	found, err := storage.GetStore(storageTypes.StoreTypeDeployment).Get(nodePath, node)
+	if !found {
+		err = errors.Errorf("No such node %s in deployment %s", nodeName, deploymentID)
+	}
+	return node, err
+}
+
+// storeNodeTemplate stores a node template in Yorc
+func storeNodeTemplate(ctx context.Context, deploymentID, nodeName string, nodeTemplate *tosca.NodeTemplate) error {
+	nodePrefix := path.Join(consulutil.DeploymentKVPrefix, deploymentID, "topology", "nodes", nodeName)
+	return storage.GetStore(storageTypes.StoreTypeDeployment).Set(ctx, nodePrefix, nodeTemplate)
 }

@@ -16,7 +16,6 @@ package common
 
 import (
 	"context"
-	"strconv"
 	"strings"
 
 	"github.com/hashicorp/consul/api"
@@ -41,6 +40,8 @@ const (
 	DatasetInfoLocations = "locations"
 	// DatasetInfoLocations is an attribute providing the number of files in a dataset
 	DatasetInfoNumberOfFiles = "number_of_files"
+	// DatasetInfoLocations is an attribute providing the number of small files in a dataset (<= 32MB)
+	DatasetInfoNumberOfSmallFiles = "number_of_files"
 	// DatasetInfoLocations is an attribute providing the size in bytes of a dataset
 	DatasetInfoSize                          = "size"
 	associatedComputeInstanceRequirementName = "os"
@@ -183,33 +184,45 @@ func (e *DDIExecution) SetDatasetInfoCapabilityLocationsAttribute(ctx context.Co
 	return err
 }
 
-func (e *DDIExecution) SetDatasetInfoCapabilitySizeAttribute(ctx context.Context, size int) error {
+func (e *DDIExecution) SetDatasetInfoCapabilitySizeAttribute(ctx context.Context, size string) error {
 
-	sizeStr := strconv.Itoa(size)
 	err := deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
-		DatasetInfoCapability, DatasetInfoSize, sizeStr)
+		DatasetInfoCapability, DatasetInfoSize, size)
 	if err != nil {
 		return err
 	}
 
 	// Adding as well node template attributes
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
-		DatasetInfoSize, sizeStr)
+		DatasetInfoSize, size)
 	return err
 }
 
-func (e *DDIExecution) SetDatasetInfoCapabilityNumberOfFilesAttribute(ctx context.Context, filesNumber int) error {
+func (e *DDIExecution) SetDatasetInfoCapabilityNumberOfFilesAttribute(ctx context.Context, filesNumber string) error {
 
-	nStr := strconv.Itoa(filesNumber)
 	err := deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
-		DatasetInfoCapability, DatasetInfoNumberOfFiles, nStr)
+		DatasetInfoCapability, DatasetInfoNumberOfFiles, filesNumber)
 	if err != nil {
 		return err
 	}
 
 	// Adding as well node template attributes
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
-		DatasetInfoNumberOfFiles, nStr)
+		DatasetInfoNumberOfFiles, filesNumber)
+	return err
+}
+
+func (e *DDIExecution) SetDatasetInfoCapabilityNumberOfSmallFilesAttribute(ctx context.Context, filesNumber string) error {
+
+	err := deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		DatasetInfoCapability, DatasetInfoNumberOfSmallFiles, filesNumber)
+	if err != nil {
+		return err
+	}
+
+	// Adding as well node template attributes
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		DatasetInfoNumberOfSmallFiles, filesNumber)
 	return err
 }
 
@@ -257,8 +270,8 @@ func (e *DDIExecution) GetDDILocationFromComputeLocation(ctx context.Context,
 
 	var locationProps config.DynamicMap
 
-	// Convention: the last 3 letters of this location identiy the datacenter
-	dcID := strings.ToLower(computeLocation[(len(computeLocation) - 3):])
+	// Convention: the first section of location identify the datacenter
+	dcID := strings.ToLower(strings.SplitN(computeLocation, "_", 2)[0])
 	locations, err := locationMgr.GetLocations()
 	if err != nil {
 		return locationProps, err

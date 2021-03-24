@@ -89,7 +89,7 @@ type Client interface {
 	SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath string, jobID, taskID int64) (string, error)
 	SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath string, jobID, taskID int64) (string, error)
 	GetCloudStagingAreaProperties() LocationCloudStagingArea
-	GetDDIDatasetInfoRequestStatus(token, requestID string) (string, int, int, error)
+	GetDDIDatasetInfoRequestStatus(token, requestID string) (string, string, string, string, error)
 	GetDataTransferRequestStatus(token, requestID string) (string, string, error)
 	GetDeletionRequestStatus(token, requestID string) (string, error)
 	GetCloudStagingAreaName() string
@@ -379,7 +379,7 @@ func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceS
 }
 
 // GetDDIDatasetInfoRequestStatus returns the status of a dataset info request
-func (d *ddiClient) GetDDIDatasetInfoRequestStatus(token, requestID string) (string, int, int, error) {
+func (d *ddiClient) GetDDIDatasetInfoRequestStatus(token, requestID string) (string, string, string, string, error) {
 
 	var response DatasetInfo
 	err := d.httpStagingClient.doRequest(http.MethodGet, path.Join(ddiStagingDatasetInfoREST, requestID),
@@ -388,7 +388,7 @@ func (d *ddiClient) GetDDIDatasetInfoRequestStatus(token, requestID string) (str
 		err = errors.Wrapf(err, "Failed to submit get status for data transfer request %s", requestID)
 	}
 
-	return response.Result, response.Size, response.NumberOfFiles, err
+	return response.Result, response.Size, response.NumberOfFiles, response.NumberOfSmallFiles, err
 }
 
 // GetDataTransferRequestStatus returns the status of a data transfer request

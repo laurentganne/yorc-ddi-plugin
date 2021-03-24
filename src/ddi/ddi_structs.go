@@ -136,7 +136,8 @@ type DatasetInfoRequest struct {
 
 // DatasetInfoResponse holds parameters of a dataset info request response
 type DatasetInfo struct {
-	Result        string `json:"result"`
-	Size          int    `json:"size,omitempty"`
-	NumberOfFiles int    `json:"file,omitempty"`
+	Result             string `json:"result"`
+	Size               string `json:"size,omitempty"`
+	NumberOfFiles      string `json:"totalfiles,omitempty"`
+	NumberOfSmallFiles string `json:"smallfiles,omitempty"`
 }

@@ -874,12 +874,13 @@ node_types:
     attributes:
       locations:
         type: list
-        entry_schema:
-          type: string
         description: Locations of the dataset
       number_of_files:
         type: string
         description: Number of files in the dataset
+      number_of_small_files:
+        type: string
+        description: Number of small files in the dataset (<= 32MB)
       size:
         type: string
         description: Size of the dataset in bytes
@@ -932,13 +933,14 @@ node_types:
           relationship: tosca.relationships.HostedOn
     attributes:
       number_of_files: {get_operation_output: [SELF, Standard, start, NUMBER_OF_FILES]}
+      number_of_small_files: {get_operation_output: [SELF, Standard, start, NUMBER_OF_SMALL_FILES]}
       size: {get_operation_output: [SELF, Standard, start, SIZE]}
     interfaces:
       Standard:
         create:
           implementation:
-            file: "embedded"
-            type: org.lexis.common.ddi.artifacts.Deployment
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
         start:
           inputs:
             DATASET_PATH: {get_property: [SELF, dataset_path]}
@@ -1070,12 +1072,13 @@ capability_types:
     attributes:
       locations:
         type: list
-        entry_schema:
-          type: string
         description: Locations of the dataset
       number_of_files:
         type: string
-        description: Number of files in the dataset
+        description: Total number of files in the dataset
+      number_of_small_files:
+        type: string
+        description: Number of small files in the dataset (<= 32MB)
       size:
         type: string
         description: Size of the dataset in bytes

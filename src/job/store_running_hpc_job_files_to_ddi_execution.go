@@ -166,7 +166,7 @@ func (e *StoreRunningHPCJobFilesToDDI) Execute(ctx context.Context) error {
 			return errors.Wrapf(err, "Failed to store %s %s %s value %s", e.DeploymentID, e.NodeName, destinationDatasetPathConsulAttribute, "")
 		}
 
-		log.Printf("LOLO created dataset ID %s path %s\n", internalID, datasetPath)
+		log.Debugf("created dataset ID %s path %s\n", internalID, datasetPath)
 
 		// Initializing the stored files attribute that will be updated by the monitoring task
 		storedFiles := make(map[string]StoredFileInfo)

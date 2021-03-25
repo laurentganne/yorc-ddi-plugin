@@ -219,6 +219,10 @@ func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deployment
 		}
 		if ddiClient.IsAlive() {
 			return ddiClient, locationName, err
+		} else {
+			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelWARN, deploymentID).Registerf(
+				"DDI location %s specified in node %s metadata is unreachable", locationName, nodeName)
+
 		}
 	}
 
@@ -242,7 +246,7 @@ func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deployment
 				return ddiClient, locationName, err
 			} else {
 				events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelWARN, deploymentID).Registerf(
-					"DDI location %q is unreachable", loc.Name)
+					"DDI location %s is unreachable", loc.Name)
 			}
 		}
 	}

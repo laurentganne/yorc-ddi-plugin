@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/consul/api"
-	"github.com/laurentganne/yorc-ddi-plugin/v1/ddi"
+	"github.com/laurentganne/yorc-ddi-plugin/ddi"
 
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"

@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"path"
+	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -156,10 +158,16 @@ func (d *ddiClient) IsAlive() bool {
 
 	response, err := http.Get(d.StagingURL)
 	if err != nil {
+		log.Debugf("DDI client isAlive(): request to %s returned %s\n", d.StagingURL, err.Error())
 		return false
 	}
 	response.Body.Close()
+	log.Debugf("DDI client isAlive(): request to %s returned status %d\n", d.StagingURL, response.StatusCode)
 
+	// TODO: LOLO to remove when IT4I will have the endpoint
+	if d.ddiArea == "it4i_iRODS" {
+		return false
+	}
 	return response.StatusCode == 200 || response.StatusCode == 301 || response.StatusCode == 302
 }
 
@@ -336,7 +344,7 @@ func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSour
 	}
 
 	requestStr, _ := json.Marshal(request)
-	log.Printf("LOLO Submitting DDI request %s", string(requestStr))
+	log.Debugf("Submitting DDI data trasnfer request %s", string(requestStr))
 
 	var response SubmittedRequestInfo
 	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingStageREST,
@@ -366,7 +374,7 @@ func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceS
 	}
 
 	requestStr, _ := json.Marshal(request)
-	log.Printf("LOLO Submitting DDI request %s", string(requestStr))
+	log.Debugf("Submitting DDI data trasbfer request %s", string(requestStr))
 
 	var response SubmittedRequestInfo
 	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingStageREST,
@@ -426,10 +434,21 @@ func (d *ddiClient) GetReplicationStatus(token, targetSystem, targetPath string)
 		TargetPath:   targetPath,
 	}
 	var response ReplicationStatusResponse
-	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingReplicationStatusREST,
-		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
-	if err != nil {
-		err = errors.Wrapf(err, "Failed to submit replication status request for system %s path %s", targetSystem, targetPath)
+	var err error
+	// Retrying several times as this call regularly returns an error 500 Internal Server Error
+	for i := 1; i < 5; i++ {
+		err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingReplicationStatusREST,
+			[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
+		if err != nil {
+			err = errors.Wrapf(err, "Failed to submit replication status request for system %s path %s", targetSystem, targetPath)
+			if strings.Contains(err.Error(), "500 Internal Server Error") {
+				log.Printf("Attempt %d of submit replication status request for %s %s failed on error 500 Internal server error\n",
+					i, targetSystem, targetPath)
+			} else {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
 	}
 
 	return response.Status, err

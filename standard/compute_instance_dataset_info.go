@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/laurentganne/yorc-ddi-plugin/v1/common"
+	"github.com/laurentganne/yorc-ddi-plugin/common"
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/events"

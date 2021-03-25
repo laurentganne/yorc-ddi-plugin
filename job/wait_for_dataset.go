@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/laurentganne/yorc-ddi-plugin/v1/common"
-	"github.com/laurentganne/yorc-ddi-plugin/v1/ddi"
+	"github.com/laurentganne/yorc-ddi-plugin/common"
+	"github.com/laurentganne/yorc-ddi-plugin/ddi"
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/deployments"

@@ -20,9 +20,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/laurentganne/yorc-ddi-plugin/v1/common"
-	"github.com/laurentganne/yorc-ddi-plugin/v1/job"
-	"github.com/laurentganne/yorc-ddi-plugin/v1/standard"
+	"github.com/laurentganne/yorc-ddi-plugin/common"
+	"github.com/laurentganne/yorc-ddi-plugin/job"
+	"github.com/laurentganne/yorc-ddi-plugin/standard"
 
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"

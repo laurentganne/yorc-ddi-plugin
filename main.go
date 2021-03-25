@@ -15,7 +15,7 @@
 package main
 
 import (
-	"github.com/laurentganne/yorc-ddi-plugin/v1/job"
+	"github.com/laurentganne/yorc-ddi-plugin/job"
 
 	"github.com/ystia/yorc/v4/log"
 	"github.com/ystia/yorc/v4/plugin"

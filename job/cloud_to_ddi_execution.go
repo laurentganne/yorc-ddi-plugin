@@ -39,6 +39,13 @@ func (e *CloudToDDIJobExecution) Execute(ctx context.Context) error {
 	case installOperation, "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating Job %q", e.NodeName)
+		var locationName string
+		locationName, err = e.setLocationFromAssociatedCloudAreaDirectoryProvider(ctx)
+		if err != nil {
+			return err
+		}
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Location for %s is %s", e.NodeName, locationName)
 		err = e.setCloudStagingAreaAccessDetails(ctx)
 	case uninstallOperation, "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(

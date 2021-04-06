@@ -91,6 +91,12 @@ node_types:
     capabilities:
       cloud_staging_area_access:
         type: org.lexis.common.ddi.capabilities.CloudStagingAreaAccess
+    requirements:
+      - os:
+          capability: tosca.capabilities.OperatingSystem
+          node: tosca.nodes.Compute
+          relationship: org.lexis.common.ddi.relationships.SameSite
+          occurrences: [0, 1]
   org.lexis.common.ddi.nodes.EnableCloudStagingAreaAccessJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     description: >
@@ -103,6 +109,9 @@ node_types:
     # Atributes added here in addition to capability attributes, so that they
     # can be referenced with the REQ_TARGET keyword
     attributes:
+      staging_area_name:
+        type: string
+        description: Name of the cloud staging area
       remote_file_system:
         type: string
         description: remote file system to mount to access the staging area
@@ -227,6 +236,9 @@ node_types:
       destination_path:
         type: string
         description: Path to the data transferred in Cloud staging area
+      staging_area_name:
+        type: string
+        description: Name of the cloud staging area
       staging_area_directory_path:
         type: string
         description: Path of the dataset directory in Cloud staging area
@@ -757,6 +769,9 @@ node_types:
       destination_path:
         type: string
         description: Path to the data transferred in Cloud staging area
+      staging_area_name:
+        type: string
+        description: Name of the cloud staging area
       staging_area_directory_path:
         type: string
         description: Path of the dataset directory in Cloud staging area
@@ -1011,6 +1026,9 @@ capability_types:
     description: >
       A capability provided by a DDI Job performing a data transfer to the cloud staging area
     attributes:
+      staging_area_name:
+        type: string
+        description: Name of the cloud staging area
       staging_area_directory_path:
         type: string
         description: Path of the dataset directory in Cloud staging area
@@ -1055,6 +1073,9 @@ capability_types:
     description: >
       A capability providing details on the access to Cloud Staging area
     attributes:
+      staging_area_name:
+        type: string
+        description: Name of the staging area
       remote_file_system:
         type: string
         description: remote file system to mount to access the staging area
@@ -1080,6 +1101,9 @@ capability_types:
     description: >
       A capability of a node providing a directory in the Cloud Staging area mounted on a host
     attributes:
+      staging_area_name:
+        type: string
+        description: Name of the staging area
       staging_area_directory_path:
         type: string
         description: Path of the directory in Cloud staging area

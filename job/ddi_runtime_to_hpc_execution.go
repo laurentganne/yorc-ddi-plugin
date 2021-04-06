@@ -42,7 +42,10 @@ func (e *DDIRuntimeToHPCExecution) Execute(ctx context.Context) error {
 	case installOperation, "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating Job %q", e.NodeName)
-		err = e.setCloudStagingAreaAccessDetails(ctx)
+		var locationName string
+		locationName, err = e.setLocationFromAssociatedHPCJob(ctx)
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Location for %s is %s", e.NodeName, locationName)
 	case uninstallOperation, "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Deleting Job %q", e.NodeName)

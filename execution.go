@@ -349,16 +349,19 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	}
 	if isStoreRunningHPCJobType {
 		exec = &job.StoreRunningHPCJobFilesToDDI{
-			DDIExecution: &common.DDIExecution{
-				KV:           kv,
-				Cfg:          cfg,
-				DeploymentID: deploymentID,
-				TaskID:       taskID,
-				NodeName:     nodeName,
-				Token:        token,
-				Operation:    operation,
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Token:        token,
+					Operation:    operation,
+				},
+				ActionType:             job.StoreRunningHPCJobFilesToDDIAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
 			},
-			MonitoringTimeInterval: monitoringTimeInterval,
 		}
 
 		return exec, exec.ResolveExecution(ctx)

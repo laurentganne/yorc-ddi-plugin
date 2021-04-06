@@ -48,6 +48,13 @@ func (e *DeleteCloudDataExecution) Execute(ctx context.Context) error {
 	case tosca.RunnableSubmitOperationName:
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Submitting Cloud data deletion request %q", e.NodeName)
+		var locationName string
+		locationName, err = e.setLocationFromAssociatedCloudDataTransfer(ctx)
+		if err != nil {
+			return err
+		}
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Location for %s is %s", e.NodeName, locationName)
 		err = e.SubmitCloudStagingAreaDataDeletion(ctx)
 		if err != nil {
 			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(

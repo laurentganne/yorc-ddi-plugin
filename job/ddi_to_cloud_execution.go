@@ -42,6 +42,13 @@ func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
 	case installOperation, "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating Job %q", e.NodeName)
+		var locationName string
+		locationName, err = e.setLocationFromAssociatedCloudInstance(ctx)
+		if err != nil {
+			return err
+		}
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Location for %s is %s", e.NodeName, locationName)
 		err = e.setCloudStagingAreaAccessDetails(ctx)
 	case uninstallOperation, "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
@@ -113,6 +120,19 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 		requestIDConsulAttribute, requestID)
 	if err != nil {
 		return errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
+	}
+
+	// Store the staging area name
+	stagingAreaName := ddiClient.GetCloudStagingAreaName()
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		stagingAreaNameConsulAttribute, stagingAreaName)
+	if err != nil {
+		return errors.Wrapf(err, "Request %s submitted, but failed to store the staging area name %s", requestID, stagingAreaName)
+	}
+	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		dataTransferCapability, stagingAreaNameConsulAttribute, stagingAreaName)
+	if err != nil {
+		return errors.Wrapf(err, "Failed to store staging area name capability attribute value %s", stagingAreaName)
 	}
 
 	// Store the staging area directory path

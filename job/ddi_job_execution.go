@@ -49,6 +49,7 @@ const (
 	destinationDatasetPathConsulAttribute = "destination_path"
 	storedFilesConsulAttribute            = "stored_files"
 	toBeStoredFilesConsulAttribute        = "to_be_stored_files"
+	stagingAreaNameConsulAttribute        = "staging_area_name"
 	stagingAreaPathConsulAttribute        = "staging_area_directory_path"
 	datasetPathConsulAttribute            = "dataset_path"
 	datasetIDConsulAttribute              = "dataset_id"
@@ -73,6 +74,10 @@ const (
 	jobStateEnvVar                        = "JOB_STATE"
 	dataTransferCapability                = "data_transfer"
 	datasetFilesProviderCapability        = "dataset_files"
+	osCapability                          = "tosca.capabilities.OperatingSystem"
+	heappeJobCapability                   = "org.lexis.common.heappe.capabilities.HeappeJob"
+	cloudAreaDirProviderCapability        = "org.lexis.common.ddi.capabilities.CloudAreaDirectoryProvider"
+	dataTransferCloudCapability           = "org.lexis.common.ddi.capabilities.DataTransferCloud"
 )
 
 // DDIJobExecution holds DDI job Execution properties
@@ -283,5 +288,187 @@ func getStoredNodeTemplate(ctx context.Context, deploymentID, nodeName string) (
 // storeNodeTemplate stores a node template in Yorc
 func storeNodeTemplate(ctx context.Context, deploymentID, nodeName string, nodeTemplate *tosca.NodeTemplate) error {
 	nodePrefix := path.Join(consulutil.DeploymentKVPrefix, deploymentID, "topology", "nodes", nodeName)
+	return storage.GetStore(storageTypes.StoreTypeDeployment).Set(ctx, nodePrefix, nodeTemplate)
+}
+
+// GetDDILocationNameFromComputeLocationName gets the DDI location name
+// for the location on which the associated compute instance is running if any
+func (e *DDIJobExecution) GetDDILocationNameFromInfrastructureLocation(ctx context.Context,
+	infraLocation string) (string, error) {
+
+	var locationName string
+	locationMgr, err := locations.GetManager(e.Cfg)
+	if err != nil {
+		return locationName, err
+	}
+	// Convention: the first section of location identify the datacenter
+	dcID := strings.ToLower(strings.SplitN(infraLocation, "_", 2)[0])
+	locations, err := locationMgr.GetLocations()
+	if err != nil {
+		return locationName, err
+	}
+
+	for _, loc := range locations {
+		if loc.Type == common.DDIInfrastructureType && strings.HasPrefix(strings.ToLower(loc.Name), dcID) {
+			return loc.Name, err
+		}
+	}
+
+	return locationName, err
+}
+
+// setLocationFromAssociatedCloudInstance sets the location of this component
+// according to an associated compute instance location
+func (e *DDIJobExecution) setLocationFromAssociatedCloudInstance(ctx context.Context) (string, error) {
+	return e.setLocationFromAssociatedTarget(ctx, osCapability)
+}
+
+// setLocationFromAssociatedHPCJob sets the location of this component
+// according to an associated HPC location
+func (e *DDIJobExecution) setLocationFromAssociatedHPCJob(ctx context.Context) (string, error) {
+	return e.setLocationFromAssociatedTarget(ctx, heappeJobCapability)
+}
+
+// setLocationFromAssociatedTarget sets the location of this component
+// according to an associated target
+func (e *DDIJobExecution) setLocationFromAssociatedTarget(ctx context.Context, targetCapability string) (string, error) {
+	var locationName string
+	nodeTemplate, err := e.getStoredNodeTemplate(ctx, e.NodeName)
+	if err != nil {
+		return locationName, err
+	}
+
+	// Get the associated target node name if any
+	var targetNodeName string
+	for _, nodeReq := range nodeTemplate.Requirements {
+		for _, reqAssignment := range nodeReq {
+			if reqAssignment.Capability == targetCapability {
+				targetNodeName = reqAssignment.Node
+				break
+			}
+		}
+	}
+	if targetNodeName == "" {
+		return locationName, err
+	}
+
+	// Get the target location
+	targetNodeTemplate, err := e.getStoredNodeTemplate(ctx, targetNodeName)
+	if err != nil {
+		return locationName, err
+	}
+	var targetLocationName string
+	if targetNodeTemplate.Metadata != nil {
+		targetLocationName = targetNodeTemplate.Metadata[tosca.MetadataLocationNameKey]
+	}
+	if targetLocationName == "" {
+		return locationName, err
+	}
+
+	// Get the corresponding DDI location
+	locationName, err = e.GetDDILocationNameFromInfrastructureLocation(ctx, targetLocationName)
+	if err != nil || locationName == "" {
+		return locationName, err
+	}
+
+	// Store the location name in this node template metadata
+	if nodeTemplate.Metadata == nil {
+		nodeTemplate.Metadata = make(map[string]string)
+	}
+	nodeTemplate.Metadata[tosca.MetadataLocationNameKey] = locationName
+	// Location is now changed for this node template, storing it
+	err = e.storeNodeTemplate(ctx, e.NodeName, nodeTemplate)
+	return locationName, err
+}
+
+// setLocationFromAssociatedCloudAreaDirectoryProvider sets the location of this component
+// according to an associated component providing a directoy in a cloud area
+func (e *DDIJobExecution) setLocationFromAssociatedCloudAreaDirectoryProvider(ctx context.Context) (string, error) {
+	return e.setLocationFromAssociatedCloudProvider(ctx, cloudAreaDirProviderCapability)
+}
+
+// setLocationFromAssociatedCloudAreaDirectoryProvider sets the location of this component
+// according to an associated component providing a directoy in a cloud area
+func (e *DDIJobExecution) setLocationFromAssociatedCloudDataTransfer(ctx context.Context) (string, error) {
+	return e.setLocationFromAssociatedCloudProvider(ctx, dataTransferCloudCapability)
+}
+
+// setLocationFromAssociatedCloudAreaDirectoryProvider sets the location of this component
+// according to an associated component providing a directoy in a cloud area
+func (e *DDIJobExecution) setLocationFromAssociatedCloudProvider(ctx context.Context, capabilityName string) (string, error) {
+
+	var locationName string
+	nodeTemplate, err := e.getStoredNodeTemplate(ctx, e.NodeName)
+	if err != nil {
+		return locationName, err
+	}
+
+	// Get the associated target node name if any
+	var targetNodeName string
+	for _, nodeReq := range nodeTemplate.Requirements {
+		for _, reqAssignment := range nodeReq {
+			if reqAssignment.Capability == capabilityName {
+				targetNodeName = reqAssignment.Node
+				break
+			}
+		}
+	}
+	if targetNodeName == "" {
+		return locationName, err
+	}
+
+	val, err := deployments.GetInstanceAttributeValue(ctx, e.DeploymentID, targetNodeName, "0", stagingAreaNameConsulAttribute)
+	if err != nil {
+		return locationName, errors.Wrapf(err, "Failed to get staging area name for deployment %s node %s", e.DeploymentID, targetNodeName)
+	} else if val == nil {
+		return locationName, errors.Errorf("Found no staging area name for deployment %s node %s", e.DeploymentID, targetNodeName)
+	}
+
+	stagingAreaName := val.RawString()
+	locationMgr, err := locations.GetManager(e.Cfg)
+	if err != nil {
+		return locationName, err
+	}
+
+	locations, err := locationMgr.GetLocations()
+	if err != nil {
+		return locationName, err
+	}
+	for _, loc := range locations {
+		if loc.Type == common.DDIInfrastructureType && loc.Properties.GetString(ddi.LocationCloudStagingAreaNamePropertyName) == stagingAreaName {
+			locationName = loc.Name
+			break
+		}
+	}
+
+	if locationName == "" {
+		return locationName, err
+	}
+
+	// Store the location name in this node template metadata
+	if nodeTemplate.Metadata == nil {
+		nodeTemplate.Metadata = make(map[string]string)
+	}
+	nodeTemplate.Metadata[tosca.MetadataLocationNameKey] = locationName
+	// Location is now changed for this node template, storing it
+	err = e.storeNodeTemplate(ctx, e.NodeName, nodeTemplate)
+	return locationName, err
+
+}
+
+// getStoredNodeTemplate returns the description of a node stored by Yorc
+func (e *DDIJobExecution) getStoredNodeTemplate(ctx context.Context, nodeName string) (*tosca.NodeTemplate, error) {
+	node := new(tosca.NodeTemplate)
+	nodePath := path.Join(consulutil.DeploymentKVPrefix, e.DeploymentID, "topology", "nodes", nodeName)
+	found, err := storage.GetStore(storageTypes.StoreTypeDeployment).Get(nodePath, node)
+	if !found {
+		err = errors.Errorf("No such node %s in deployment %s", nodeName, e.DeploymentID)
+	}
+	return node, err
+}
+
+// storeNodeTemplate stores a node template in Yorc
+func (e *DDIJobExecution) storeNodeTemplate(ctx context.Context, nodeName string, nodeTemplate *tosca.NodeTemplate) error {
+	nodePrefix := path.Join(consulutil.DeploymentKVPrefix, e.DeploymentID, "topology", "nodes", nodeName)
 	return storage.GetStore(storageTypes.StoreTypeDeployment).Set(ctx, nodePrefix, nodeTemplate)
 }

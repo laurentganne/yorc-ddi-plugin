@@ -45,7 +45,7 @@ func (e *ComputeDatasetInfoExecution) Execute(ctx context.Context) error {
 	case "install", "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating %q", e.NodeName)
-		ddiClient, err := e.GetDDIClientFromAssociatedComputeLocation(ctx)
+		ddiClient, err := e.GetDDIClientFromHostingComputeLocation(ctx)
 		if err != nil {
 			return err
 		}

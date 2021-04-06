@@ -304,6 +304,7 @@ func (o *ActionOperator) monitorDataset(ctx context.Context, cfg config.Configur
 
 	}
 
+	// TODO: checl all DDI clients
 	ddiClient, err := getDDIClient(ctx, cfg, deploymentID, actionData.nodeName)
 	if err != nil {
 		return true, err

@@ -66,9 +66,10 @@ const (
 	locationStagingURLPropertyName = "staging_url"
 	locationSSHFSURLPropertyName   = "sshfs_url"
 	locationDatasetURLPropertyName = "dataset_url"
-	// LocationDDIAreaPropertyName is the property defining the DDI are name of a DDI location
-	LocationDDIAreaPropertyName                          = "ddi_area"
-	locationCloudStagingAreaNamePropertyName             = "cloud_staging_area_name"
+	// LocationDDIAreaPropertyName is the property defining the DDI area name of a DDI location
+	LocationDDIAreaPropertyName = "ddi_area"
+	// LocationCloudStagingAreaNamePropertyName is the property defining the cloud staging area name of a DDI location
+	LocationCloudStagingAreaNamePropertyName             = "cloud_staging_area_name"
 	locationCloudStagingAreaRemoteFileSystemPropertyName = "cloud_staging_area_remote_file_system"
 	locationCloudStagingAreaMountTypePropertyName        = "cloud_staging_area_mount_type"
 	locationCloudStagingAreaMountOptionsPropertyName     = "cloud_staging_area_mount_options"
@@ -125,7 +126,7 @@ func GetClient(locationProps config.DynamicMap) (Client, error) {
 		return nil, errors.Errorf("No %s property defined in DDI location configuration", LocationDDIAreaPropertyName)
 	}
 	var cloudStagingArea LocationCloudStagingArea
-	cloudStagingArea.Name = locationProps.GetString(locationCloudStagingAreaNamePropertyName)
+	cloudStagingArea.Name = locationProps.GetString(LocationCloudStagingAreaNamePropertyName)
 	cloudStagingArea.RemoteFileSystem = locationProps.GetString(locationCloudStagingAreaRemoteFileSystemPropertyName)
 	cloudStagingArea.MountType = locationProps.GetString(locationCloudStagingAreaMountTypePropertyName)
 	cloudStagingArea.MountOptions = locationProps.GetString(locationCloudStagingAreaMountOptionsPropertyName)
@@ -164,7 +165,7 @@ func (d *ddiClient) IsAlive() bool {
 	response.Body.Close()
 	log.Debugf("DDI client isAlive(): request to %s returned status %d\n", d.StagingURL, response.StatusCode)
 
-	// TODO: LOLO to remove when IT4I will have the endpoint
+	// TODO: to remove when IT4I will have the endpoint
 	if d.ddiArea == "it4i_iRODS" {
 		return false
 	}

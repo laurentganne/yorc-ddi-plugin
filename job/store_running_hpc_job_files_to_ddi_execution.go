@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/laurentganne/yorc-ddi-plugin/common"
 	"github.com/laurentganne/yorc-ddi-plugin/ddi"
 	"github.com/pkg/errors"
 
@@ -35,7 +34,7 @@ import (
 
 // StoreRunningHPCJobFilesToDDI holds DDI to HPC data transfer job Execution properties
 type StoreRunningHPCJobFilesToDDI struct {
-	*common.DDIExecution
+	*DDIJobExecution
 	MonitoringTimeInterval time.Duration
 }
 
@@ -114,7 +113,10 @@ func (e *StoreRunningHPCJobFilesToDDI) Execute(ctx context.Context) error {
 	case installOperation, "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating Job %q", e.NodeName)
-
+		var locationName string
+		locationName, err = e.setLocationFromAssociatedHPCJob(ctx)
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Location for %s is %s", e.NodeName, locationName)
 	case uninstallOperation, "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Deleting Job %q", e.NodeName)

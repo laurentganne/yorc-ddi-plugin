@@ -45,6 +45,7 @@ const (
 	// DatasetInfoLocations is an attribute providing the size in bytes of a dataset
 	DatasetInfoSize                          = "size"
 	associatedComputeInstanceRequirementName = "os"
+	hostingComputeInstanceRequirementName    = "host"
 	cloudStagingAreaAccessCapability         = "cloud_staging_area_access"
 	ddiAccessCapability                      = "ddi_access"
 )
@@ -96,6 +97,11 @@ func (e *DDIExecution) SetCloudStagingAreaAccessCapabilityAttributes(ctx context
 	cloudAreaProps := ddiClient.GetCloudStagingAreaProperties()
 
 	err := deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		cloudStagingAreaAccessCapability, "staging_area_name", cloudAreaProps.Name)
+	if err != nil {
+		return err
+	}
+	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		cloudStagingAreaAccessCapability, "remote_file_system", cloudAreaProps.RemoteFileSystem)
 	if err != nil {
 		return err
@@ -122,6 +128,11 @@ func (e *DDIExecution) SetCloudStagingAreaAccessCapabilityAttributes(ctx context
 	}
 
 	// Adding as well node template attributes
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		"staging_area_name", cloudAreaProps.Name)
+	if err != nil {
+		return err
+	}
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		"remote_file_system", cloudAreaProps.RemoteFileSystem)
 	if err != nil {
@@ -229,9 +240,21 @@ func (e *DDIExecution) SetDatasetInfoCapabilityNumberOfSmallFilesAttribute(ctx c
 // GetDDIClientFromAssociatedComputeLocation gets a DDI client corresponding to the location
 // on which the associated compute instance is running
 func (e *DDIExecution) GetDDIClientFromAssociatedComputeLocation(ctx context.Context) (ddi.Client, error) {
+	return e.getDDIClientFromRequirement(ctx, associatedComputeInstanceRequirementName)
+}
+
+// GetDDIClientFromHostingComputeLocation gets a DDI client corresponding to the location
+// on which the hosting compute instance is running
+func (e *DDIExecution) GetDDIClientFromHostingComputeLocation(ctx context.Context) (ddi.Client, error) {
+	return e.getDDIClientFromRequirement(ctx, hostingComputeInstanceRequirementName)
+}
+
+// getDDIClientFromRequirement gets a DDI client corresponding to the location
+// on which the associated compute instance is running
+func (e *DDIExecution) getDDIClientFromRequirement(ctx context.Context, requirementName string) (ddi.Client, error) {
 	// First get the associated compute node
-	computeNodeName, err := deployments.GetTargetNodeForRequirementByName(ctx,
-		e.DeploymentID, e.NodeName, associatedComputeInstanceRequirementName)
+	targetNodeName, err := deployments.GetTargetNodeForRequirementByName(ctx,
+		e.DeploymentID, e.NodeName, requirementName)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +266,7 @@ func (e *DDIExecution) GetDDIClientFromAssociatedComputeLocation(ctx context.Con
 
 	var locationProps config.DynamicMap
 	found, locationName, err := deployments.GetNodeMetadata(ctx, e.DeploymentID,
-		computeNodeName, tosca.MetadataLocationNameKey)
+		targetNodeName, tosca.MetadataLocationNameKey)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +301,7 @@ func (e *DDIExecution) GetDDILocationFromComputeLocation(ctx context.Context,
 	}
 
 	for _, loc := range locations {
-		if loc.Type == DDIInfrastructureType && strings.HasSuffix(strings.ToLower(loc.Name), dcID) {
+		if loc.Type == DDIInfrastructureType && strings.HasPrefix(strings.ToLower(loc.Name), dcID) {
 			locationProps, err := locationMgr.GetLocationProperties(loc.Name, DDIInfrastructureType)
 			return locationProps, err
 		}

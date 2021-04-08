@@ -61,7 +61,7 @@ const (
 	requestStatusFailed         = "FAILED"
 	actionDataNodeName          = "nodeName"
 	actionDataRequestID         = "requestID"
-	actionDataToken             = "token"
+	actionDataToken             = "accessToken"
 	actionDataTaskID            = "taskID"
 	actionDataMetadata          = "metadata"
 	actionDataFilesPatterns     = "files_patterns"

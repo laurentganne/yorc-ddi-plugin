@@ -8,7 +8,7 @@ metadata:
 imports:
   - tosca-normative-types:1.0.0-ALIEN20
   - yorc-types:1.1.0
-  - org.lexis.common.heappe-types:1.0.3
+  - org.lexis.common.heappe-types:1.0.6
 
 artifact_types:
   org.lexis.common.ddi.artifacts.Deployment:
@@ -106,7 +106,7 @@ node_types:
     description: >
       Enable the access to the Cloud Staging Area for a Compute Instance
     properties:
-      token:
+      accessToken:
         description: Access token
         type: string
         required: true
@@ -169,7 +169,7 @@ node_types:
     description: >
       Disable the access to the Cloud Staging Area for a Compute Instance
     properties:
-      token:
+      accessToken:
         description: Access token
         type: string
         required: true
@@ -213,7 +213,7 @@ node_types:
     description: >
       Transfer datasets from DDI to Cloud staging area (abstract)
     properties:
-      token:
+      accessToken:
         description: Access token
         type: string
         required: true
@@ -284,7 +284,7 @@ node_types:
     description: >
       Transfer data from Cloud staging area to DDI (abstract)
     properties:
-      token:
+      accessToken:
         description: Access token
         type: string
         required: true
@@ -356,7 +356,7 @@ node_types:
     description: >
       Delete a dataset from Cloud staging area (abstract)
     properties:
-      token:
+      accessToken:
         description: Access token
         type: string
         required: true
@@ -406,7 +406,7 @@ node_types:
     description: >
       Transfer datasets from DDI to HPC staging area for a given task in the job (abstract)
     properties:
-      token:
+      accessToken:
         description: Access token
         type: string
         required: true
@@ -477,7 +477,7 @@ node_types:
     description: >
       Transfer data from an HPC job to DDI (abstract)
     properties:
-      token:
+      accessToken:
         description: Access token
         type: string
         required: true
@@ -548,7 +548,7 @@ node_types:
     description: >
       Transfer files from an HPC running job to DDI until this HPC job ends (abstract)
     properties:
-      token:
+      accessToken:
         description: Access token
         type: string
         required: true
@@ -663,7 +663,7 @@ node_types:
     description: >
       Wait for a dataset to appear in DDI, and optionally wait for files in this dataset (abstract)
     properties:
-      token:
+      accessToken:
         description: Access token
         type: string
         required: true
@@ -726,7 +726,7 @@ node_types:
     description: >
       Transfer from DDI to Cloud staging area, a dataset (or one dataset file) selected at runtime (abstract)
     properties:
-      token:
+      accessToken:
         description: Access token
         type: string
         required: true
@@ -809,7 +809,7 @@ node_types:
     description: >
       Transfer from DDI to HPC staging area, a dataset (or one dataset file) selected at runtime (abstract)
     properties:
-      token:
+      accessToken:
         description: Access token
         type: string
         required: true
@@ -907,7 +907,7 @@ node_types:
     description: >
       Get DDI dataset info
     properties:
-      token:
+      accessToken:
         description: Access token
         type: string
         required: true

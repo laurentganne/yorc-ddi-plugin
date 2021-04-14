@@ -17,7 +17,6 @@ package job
 import (
 	"context"
 	"encoding/json"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -29,11 +28,8 @@ import (
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
 	"github.com/ystia/yorc/v4/events"
-	"github.com/ystia/yorc/v4/helper/consulutil"
 	"github.com/ystia/yorc/v4/locations"
 	"github.com/ystia/yorc/v4/prov"
-	"github.com/ystia/yorc/v4/storage"
-	storageTypes "github.com/ystia/yorc/v4/storage/types"
 	"github.com/ystia/yorc/v4/tosca"
 )
 
@@ -70,12 +66,10 @@ const (
 	ipAddressEnvVar                       = "IP_ADDRESS"
 	filePatternEnvVar                     = "FILE_PATTERN"
 	jobChangedFilesEnvVar                 = "JOB_CHANGED_FILES"
-	jobStartDataEnvVar                    = "JOB_START_DATE"
+	jobStartDateEnvVar                    = "JOB_START_DATE"
 	jobStateEnvVar                        = "JOB_STATE"
 	dataTransferCapability                = "data_transfer"
 	datasetFilesProviderCapability        = "dataset_files"
-	osCapability                          = "tosca.capabilities.OperatingSystem"
-	heappeJobCapability                   = "org.lexis.common.heappe.capabilities.HeappeJob"
 	cloudAreaDirProviderCapability        = "org.lexis.common.ddi.capabilities.CloudAreaDirectoryProvider"
 	dataTransferCloudCapability           = "org.lexis.common.ddi.capabilities.DataTransferCloud"
 )
@@ -260,7 +254,7 @@ func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deployment
 }
 
 func setNodeMetadataLocation(ctx context.Context, cfg config.Configuration, deploymentID, nodeName, locationName string) error {
-	nodeTemplate, err := getStoredNodeTemplate(ctx, deploymentID, nodeName)
+	nodeTemplate, err := common.GetStoredNodeTemplate(ctx, deploymentID, nodeName)
 	if err != nil {
 		return err
 	}
@@ -270,115 +264,8 @@ func setNodeMetadataLocation(ctx context.Context, cfg config.Configuration, depl
 	}
 	nodeTemplate.Metadata[tosca.MetadataLocationNameKey] = locationName
 	// Location is now changed for this node template, storing it
-	err = storeNodeTemplate(ctx, deploymentID, nodeName, nodeTemplate)
+	err = common.StoreNodeTemplate(ctx, deploymentID, nodeName, nodeTemplate)
 	return err
-}
-
-// getStoredNodeTemplate returns the description of a node stored by Yorc
-func getStoredNodeTemplate(ctx context.Context, deploymentID, nodeName string) (*tosca.NodeTemplate, error) {
-	node := new(tosca.NodeTemplate)
-	nodePath := path.Join(consulutil.DeploymentKVPrefix, deploymentID, "topology", "nodes", nodeName)
-	found, err := storage.GetStore(storageTypes.StoreTypeDeployment).Get(nodePath, node)
-	if !found {
-		err = errors.Errorf("No such node %s in deployment %s", nodeName, deploymentID)
-	}
-	return node, err
-}
-
-// storeNodeTemplate stores a node template in Yorc
-func storeNodeTemplate(ctx context.Context, deploymentID, nodeName string, nodeTemplate *tosca.NodeTemplate) error {
-	nodePrefix := path.Join(consulutil.DeploymentKVPrefix, deploymentID, "topology", "nodes", nodeName)
-	return storage.GetStore(storageTypes.StoreTypeDeployment).Set(ctx, nodePrefix, nodeTemplate)
-}
-
-// GetDDILocationNameFromComputeLocationName gets the DDI location name
-// for the location on which the associated compute instance is running if any
-func (e *DDIJobExecution) GetDDILocationNameFromInfrastructureLocation(ctx context.Context,
-	infraLocation string) (string, error) {
-
-	var locationName string
-	locationMgr, err := locations.GetManager(e.Cfg)
-	if err != nil {
-		return locationName, err
-	}
-	// Convention: the first section of location identify the datacenter
-	dcID := strings.ToLower(strings.SplitN(infraLocation, "_", 2)[0])
-	locations, err := locationMgr.GetLocations()
-	if err != nil {
-		return locationName, err
-	}
-
-	for _, loc := range locations {
-		if loc.Type == common.DDIInfrastructureType && strings.HasPrefix(strings.ToLower(loc.Name), dcID) {
-			return loc.Name, err
-		}
-	}
-
-	return locationName, err
-}
-
-// setLocationFromAssociatedCloudInstance sets the location of this component
-// according to an associated compute instance location
-func (e *DDIJobExecution) setLocationFromAssociatedCloudInstance(ctx context.Context) (string, error) {
-	return e.setLocationFromAssociatedTarget(ctx, osCapability)
-}
-
-// setLocationFromAssociatedHPCJob sets the location of this component
-// according to an associated HPC location
-func (e *DDIJobExecution) setLocationFromAssociatedHPCJob(ctx context.Context) (string, error) {
-	return e.setLocationFromAssociatedTarget(ctx, heappeJobCapability)
-}
-
-// setLocationFromAssociatedTarget sets the location of this component
-// according to an associated target
-func (e *DDIJobExecution) setLocationFromAssociatedTarget(ctx context.Context, targetCapability string) (string, error) {
-	var locationName string
-	nodeTemplate, err := e.getStoredNodeTemplate(ctx, e.NodeName)
-	if err != nil {
-		return locationName, err
-	}
-
-	// Get the associated target node name if any
-	var targetNodeName string
-	for _, nodeReq := range nodeTemplate.Requirements {
-		for _, reqAssignment := range nodeReq {
-			if reqAssignment.Capability == targetCapability {
-				targetNodeName = reqAssignment.Node
-				break
-			}
-		}
-	}
-	if targetNodeName == "" {
-		return locationName, err
-	}
-
-	// Get the target location
-	targetNodeTemplate, err := e.getStoredNodeTemplate(ctx, targetNodeName)
-	if err != nil {
-		return locationName, err
-	}
-	var targetLocationName string
-	if targetNodeTemplate.Metadata != nil {
-		targetLocationName = targetNodeTemplate.Metadata[tosca.MetadataLocationNameKey]
-	}
-	if targetLocationName == "" {
-		return locationName, err
-	}
-
-	// Get the corresponding DDI location
-	locationName, err = e.GetDDILocationNameFromInfrastructureLocation(ctx, targetLocationName)
-	if err != nil || locationName == "" {
-		return locationName, err
-	}
-
-	// Store the location name in this node template metadata
-	if nodeTemplate.Metadata == nil {
-		nodeTemplate.Metadata = make(map[string]string)
-	}
-	nodeTemplate.Metadata[tosca.MetadataLocationNameKey] = locationName
-	// Location is now changed for this node template, storing it
-	err = e.storeNodeTemplate(ctx, e.NodeName, nodeTemplate)
-	return locationName, err
 }
 
 // setLocationFromAssociatedCloudAreaDirectoryProvider sets the location of this component
@@ -398,7 +285,7 @@ func (e *DDIJobExecution) setLocationFromAssociatedCloudDataTransfer(ctx context
 func (e *DDIJobExecution) setLocationFromAssociatedCloudProvider(ctx context.Context, capabilityName string) (string, error) {
 
 	var locationName string
-	nodeTemplate, err := e.getStoredNodeTemplate(ctx, e.NodeName)
+	nodeTemplate, err := common.GetStoredNodeTemplate(ctx, e.DeploymentID, e.NodeName)
 	if err != nil {
 		return locationName, err
 	}
@@ -451,24 +338,7 @@ func (e *DDIJobExecution) setLocationFromAssociatedCloudProvider(ctx context.Con
 	}
 	nodeTemplate.Metadata[tosca.MetadataLocationNameKey] = locationName
 	// Location is now changed for this node template, storing it
-	err = e.storeNodeTemplate(ctx, e.NodeName, nodeTemplate)
+	err = common.StoreNodeTemplate(ctx, e.DeploymentID, e.NodeName, nodeTemplate)
 	return locationName, err
 
-}
-
-// getStoredNodeTemplate returns the description of a node stored by Yorc
-func (e *DDIJobExecution) getStoredNodeTemplate(ctx context.Context, nodeName string) (*tosca.NodeTemplate, error) {
-	node := new(tosca.NodeTemplate)
-	nodePath := path.Join(consulutil.DeploymentKVPrefix, e.DeploymentID, "topology", "nodes", nodeName)
-	found, err := storage.GetStore(storageTypes.StoreTypeDeployment).Get(nodePath, node)
-	if !found {
-		err = errors.Errorf("No such node %s in deployment %s", nodeName, e.DeploymentID)
-	}
-	return node, err
-}
-
-// storeNodeTemplate stores a node template in Yorc
-func (e *DDIJobExecution) storeNodeTemplate(ctx context.Context, nodeName string, nodeTemplate *tosca.NodeTemplate) error {
-	nodePrefix := path.Join(consulutil.DeploymentKVPrefix, e.DeploymentID, "topology", "nodes", nodeName)
-	return storage.GetStore(storageTypes.StoreTypeDeployment).Set(ctx, nodePrefix, nodeTemplate)
 }

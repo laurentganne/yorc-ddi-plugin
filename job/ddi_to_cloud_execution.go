@@ -43,7 +43,7 @@ func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating Job %q", e.NodeName)
 		var locationName string
-		locationName, err = e.setLocationFromAssociatedCloudInstance(ctx)
+		locationName, err = e.SetLocationFromAssociatedCloudInstance(ctx)
 		if err != nil {
 			return err
 		}

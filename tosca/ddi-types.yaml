@@ -149,7 +149,7 @@ node_types:
             type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, token] }
+          TOKEN: { get_property: [SELF, accessToken] }
         submit:
           inputs:
             IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
@@ -192,7 +192,7 @@ node_types:
             type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, token] }
+          TOKEN: { get_property: [SELF, accessToken] }
         submit:
           inputs:
             IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
@@ -257,7 +257,7 @@ node_types:
             type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, token] }
+          TOKEN: { get_property: [SELF, accessToken] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
@@ -328,7 +328,7 @@ node_types:
             type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, token] }
+          TOKEN: { get_property: [SELF, accessToken] }
         submit:
           inputs:
             SOURCE_SUBDIRECTORY:  { get_property: [SELF, source_subdirectory] }
@@ -381,7 +381,7 @@ node_types:
             type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, token] }
+          TOKEN: { get_property: [SELF, accessToken] }
         submit:
           inputs:
             CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_dataset_provider, staging_area_directory_path] }
@@ -447,7 +447,7 @@ node_types:
             type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, token] }
+          TOKEN: { get_property: [SELF, accessToken] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
@@ -524,7 +524,7 @@ node_types:
             type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, token] }
+          TOKEN: { get_property: [SELF, accessToken] }
         submit:
           inputs:
             HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
@@ -616,7 +616,7 @@ node_types:
             type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, token] }
+          TOKEN: { get_property: [SELF, accessToken] }
         submit:
           implementation:
             file: "embedded"
@@ -716,7 +716,7 @@ node_types:
             type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, token] }
+          TOKEN: { get_property: [SELF, accessToken] }
         submit:
           inputs:
             METADATA: { get_property: [SELF, metadata] }
@@ -796,7 +796,7 @@ node_types:
             type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, token] }
+          TOKEN: { get_property: [SELF, accessToken] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_attribute: [REQ_TARGET, dataset_files, dataset_path] }
@@ -871,7 +871,7 @@ node_types:
             type: org.lexis.common.ddi.artifacts.Deployment
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, token] }
+          TOKEN: { get_property: [SELF, accessToken] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_attribute: [REQ_TARGET, dataset_files, dataset_path] }
@@ -935,7 +935,7 @@ node_types:
     interfaces:
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, token] }
+          TOKEN: { get_property: [SELF, accessToken] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, dataset_path] }
@@ -979,7 +979,7 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
-  org.lexis.common.ddi.nodes.GetHPCJobDatasetInfo:
+  org.lexis.common.ddi.nodes.GetHPCJobTaskDatasetInfo:
     derived_from: org.lexis.common.ddi.nodes.pub.GetDatasetInfo
     description: >
       Get Info on a HPC job dataset
@@ -987,6 +987,13 @@ node_types:
       task_name:
         description: Name of the task for which to get files. If not set, all tasks files are considered.
         type: string
+        required: false
+      needed_files_patterns:
+        type: list
+        entry_schema:
+          type: string
+        description: |
+          List of patterns of files that need to be taken into account for a transfer
         required: false
     requirements:
       - job:
@@ -1006,6 +1013,7 @@ node_types:
             HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
             TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
             TASK_NAME: {get_property: [SELF, task_name]}
+            NEEDED_FILES_PATTERNS: { get_property: [SELF, needed_files_patterns] }
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment

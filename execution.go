@@ -36,6 +36,7 @@ const (
 	locationDefaultMonitoringTimeInterval   = 5 * time.Second
 	ddiAccessComponentType                  = "org.lexis.common.ddi.nodes.DDIAccess"
 	computeInstanceDatasetInfoComponentType = "org.lexis.common.ddi.nodes.GetComputeInstanceDatasetInfo"
+	hpcJobTaskDatasetInfoComponentType      = "org.lexis.common.ddi.nodes.GetHPCJobTaskDatasetInfo"
 	enableCloudStagingAreaJobType           = "org.lexis.common.ddi.nodes.EnableCloudStagingAreaAccessJob"
 	disableCloudStagingAreaJobType          = "org.lexis.common.ddi.nodes.DisableCloudStagingAreaAccessJob"
 	ddiToCloudJobType                       = "org.lexis.common.ddi.nodes.DDIToCloudJob"
@@ -110,6 +111,25 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 
 	if isComputeDatasetInfoComponent {
 		exec = &standard.ComputeDatasetInfoExecution{
+			DDIExecution: &common.DDIExecution{
+				KV:           kv,
+				Cfg:          cfg,
+				DeploymentID: deploymentID,
+				TaskID:       taskID,
+				NodeName:     nodeName,
+				Operation:    operation,
+			},
+		}
+		return exec, exec.ResolveExecution(ctx)
+	}
+
+	isHPCJobTaskDatasetInfo, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, hpcJobTaskDatasetInfoComponentType)
+	if err != nil {
+		return exec, err
+	}
+
+	if isHPCJobTaskDatasetInfo {
+		exec = &standard.HPCDatasetInfoExecution{
 			DDIExecution: &common.DDIExecution{
 				KV:           kv,
 				Cfg:          cfg,

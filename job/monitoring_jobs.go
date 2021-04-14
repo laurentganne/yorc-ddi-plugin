@@ -575,7 +575,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		}
 	}
 
-	startDateStr := o.getValueFromEnv(jobStartDataEnvVar, envInputs)
+	startDateStr := o.getValueFromEnv(jobStartDateEnvVar, envInputs)
 	if startDateStr == "" {
 		log.Debugf("Nothing to store yet for %s %s, related HEAppE job not yet started", deploymentID, actionData.nodeName)
 		return deregister, err
@@ -625,7 +625,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 					delete(storedFiles, changedFile.FileName)
 				}
 			}
-			matches, err := o.matchesFilter(changedFile.FileName, filesPatterns)
+			matches, err := common.MatchesFilter(changedFile.FileName, filesPatterns)
 			if err != nil {
 				return true, errors.Wrapf(err, "Failed to check if file %s matches filters %v", changedFile.FileName, filesPatterns)
 			}
@@ -738,19 +738,6 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	return deregister, err
 }
 
-func (o *ActionOperator) matchesFilter(fileName string, filesPatterns []string) (bool, error) {
-	for _, fPattern := range filesPatterns {
-		matched, err := regexp.MatchString(fPattern, fileName)
-		if err != nil {
-			return false, err
-		}
-		if matched {
-			return true, err
-		}
-	}
-
-	return (len(filesPatterns) == 0), nil
-}
 func (o *ActionOperator) getValueFromEnv(envVarName string, envVars []*operations.EnvInput) string {
 
 	var result string

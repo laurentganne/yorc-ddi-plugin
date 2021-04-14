@@ -42,7 +42,7 @@ func (e *HPCToDDIExecution) Execute(ctx context.Context) error {
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating Job %q", e.NodeName)
 		var locationName string
-		locationName, err = e.setLocationFromAssociatedHPCJob(ctx)
+		locationName, err = e.SetLocationFromAssociatedHPCJob(ctx)
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Location for %s is %s", e.NodeName, locationName)
 	case uninstallOperation, "standard.delete":

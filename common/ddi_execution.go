@@ -16,17 +16,25 @@ package common
 
 import (
 	"context"
+	"encoding/json"
+	"path"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/laurentganne/yorc-ddi-plugin/ddi"
+	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
+	"github.com/ystia/yorc/v4/helper/consulutil"
 	"github.com/ystia/yorc/v4/locations"
 	"github.com/ystia/yorc/v4/log"
 	"github.com/ystia/yorc/v4/prov"
 	"github.com/ystia/yorc/v4/prov/operations"
+	"github.com/ystia/yorc/v4/storage"
+	storageTypes "github.com/ystia/yorc/v4/storage/types"
 	"github.com/ystia/yorc/v4/tosca"
 )
 
@@ -48,7 +56,19 @@ const (
 	hostingComputeInstanceRequirementName    = "host"
 	cloudStagingAreaAccessCapability         = "cloud_staging_area_access"
 	ddiAccessCapability                      = "ddi_access"
+	jobChangedFilesEnvVar                    = "JOB_CHANGED_FILES"
+	jobStartDateEnvVar                       = "JOB_START_DATE"
+	neededFilesPatternsEnvVar                = "NEEDED_FILES_PATTERNS"
+
+	osCapability        = "tosca.capabilities.OperatingSystem"
+	heappeJobCapability = "org.lexis.common.heappe.capabilities.HeappeJob"
 )
+
+// ChangedFile holds properties of a file created/updated by a job
+type ChangedFile struct {
+	FileName         string
+	LastModifiedDate string
+}
 
 // DDIExecution holds DDI Execution properties
 type DDIExecution struct {
@@ -61,6 +81,38 @@ type DDIExecution struct {
 	Operation      prov.Operation
 	EnvInputs      []*operations.EnvInput
 	VarInputsNames []string
+}
+
+// GetStoredNodeTemplate returns the description of a node stored by Yorc
+func GetStoredNodeTemplate(ctx context.Context, deploymentID, nodeName string) (*tosca.NodeTemplate, error) {
+	node := new(tosca.NodeTemplate)
+	nodePath := path.Join(consulutil.DeploymentKVPrefix, deploymentID, "topology", "nodes", nodeName)
+	found, err := storage.GetStore(storageTypes.StoreTypeDeployment).Get(nodePath, node)
+	if !found {
+		err = errors.Errorf("No such node %s in deployment %s", nodeName, deploymentID)
+	}
+	return node, err
+}
+
+// StoreNodeTemplate stores a node template in Yorc
+func StoreNodeTemplate(ctx context.Context, deploymentID, nodeName string, nodeTemplate *tosca.NodeTemplate) error {
+	nodePrefix := path.Join(consulutil.DeploymentKVPrefix, deploymentID, "topology", "nodes", nodeName)
+	return storage.GetStore(storageTypes.StoreTypeDeployment).Set(ctx, nodePrefix, nodeTemplate)
+}
+
+// Check if a string matches one of the filters
+func MatchesFilter(fileName string, filesPatterns []string) (bool, error) {
+	for _, fPattern := range filesPatterns {
+		matched, err := regexp.MatchString(fPattern, fileName)
+		if err != nil {
+			return false, err
+		}
+		if matched {
+			return true, err
+		}
+	}
+
+	return (len(filesPatterns) == 0), nil
 }
 
 // ResolveExecution resolves inputs before the execution of an operation
@@ -80,6 +132,166 @@ func (e *DDIExecution) GetValueFromEnvInputs(envVar string) string {
 	}
 	return result
 
+}
+
+// GetDDILocationNameFromComputeLocationName gets the DDI location name
+// for the location on which the associated compute instance is running if any
+func (e *DDIExecution) GetDDILocationNameFromInfrastructureLocation(ctx context.Context,
+	infraLocation string) (string, error) {
+
+	var locationName string
+	locationMgr, err := locations.GetManager(e.Cfg)
+	if err != nil {
+		return locationName, err
+	}
+	// Convention: the first section of location identify the datacenter
+	dcID := strings.ToLower(strings.SplitN(infraLocation, "_", 2)[0])
+	locations, err := locationMgr.GetLocations()
+	if err != nil {
+		return locationName, err
+	}
+
+	for _, loc := range locations {
+		if loc.Type == DDIInfrastructureType && strings.HasPrefix(strings.ToLower(loc.Name), dcID) {
+			return loc.Name, err
+		}
+	}
+
+	return locationName, err
+}
+
+// SetLocationFromAssociatedCloudInstance sets the location of this component
+// according to an associated compute instance location
+func (e *DDIExecution) SetLocationFromAssociatedCloudInstance(ctx context.Context) (string, error) {
+	return e.setLocationFromAssociatedTarget(ctx, osCapability)
+}
+
+// SetLocationFromAssociatedHPCJob sets the location of this component
+// according to an associated HPC location
+func (e *DDIExecution) SetLocationFromAssociatedHPCJob(ctx context.Context) (string, error) {
+	return e.setLocationFromAssociatedTarget(ctx, heappeJobCapability)
+}
+
+// GetHPCJobChangedFilesSinceStartup gets from evironment the list of files modified by a job since
+// its startup
+func (e *DDIExecution) GetHPCJobChangedFilesSinceStartup(ctx context.Context) ([]ChangedFile, error) {
+	var changedFiles []ChangedFile
+	startDateStr := e.GetValueFromEnvInputs(jobStartDateEnvVar)
+	if startDateStr == "" {
+		log.Debugf("No chnaged files for job associated to %s %s, job not yet started", e.DeploymentID, e.NodeName)
+		return changedFiles, nil
+	}
+
+	// Get list of files patterns to take into account if any
+	filesPatternsStr := e.GetValueFromEnvInputs(neededFilesPatternsEnvVar)
+	var filesPatterns []string
+	if filesPatternsStr != "" {
+		err := json.Unmarshal([]byte(filesPatternsStr), &filesPatterns)
+		if err != nil {
+			return changedFiles, errors.Wrapf(err, "Wrong format for files patterns %s for node %s", filesPatternsStr, e.NodeName)
+		}
+
+	}
+
+	layout := "2006-01-02T15:04:05"
+	startTime, err := time.Parse(layout, startDateStr)
+	if err != nil {
+		err = errors.Wrapf(err, "Node %s failed to parse job start time %s, expected layout like %s", e.NodeName, startDateStr, layout)
+		return changedFiles, err
+	}
+	// The job has started
+	// Getting the list of files and keeping only those created/updated after the start date
+	changedFilesStr := e.GetValueFromEnvInputs(jobChangedFilesEnvVar)
+
+	if changedFilesStr == "" {
+		log.Debugf("Nothing to store yet for %s %s, related HEAppE job has not yet created/updated files", e.DeploymentID, e.NodeName)
+		return changedFiles, err
+
+	}
+	err = json.Unmarshal([]byte(changedFilesStr), &changedFiles)
+	if err != nil {
+		return changedFiles, errors.Wrapf(err, "Wrong format for changed files %s for job associated to %s", changedFilesStr, e.NodeName)
+	}
+
+	// Keeping only the files since job start not already stored, removing any input file added before
+	// and removing files not matching the filters if any is defined
+	var newFilesUpdates []ChangedFile
+	layout = "2006-01-02T15:04:00Z"
+	for _, changedFile := range changedFiles {
+		changedTime, err := time.Parse(layout, changedFile.LastModifiedDate)
+		if err != nil {
+			log.Debugf("Deployment %s node %s ignoring last modified date %s which has not the expected layout %s",
+				e.DeploymentID, e.NodeName, changedFile.LastModifiedDate, layout)
+			continue
+		}
+
+		if startTime.Before(changedTime) {
+			matches, err := MatchesFilter(changedFile.FileName, filesPatterns)
+			if err != nil {
+				return newFilesUpdates, errors.Wrapf(err, "Failed to check if file %s matches filters %v", changedFile.FileName, filesPatterns)
+			}
+			if matches {
+				newFilesUpdates = append(newFilesUpdates, changedFile)
+			} else {
+				log.Debugf("ignoring file %s not matching patterns %+v\n", changedFile.FileName, filesPatterns)
+			}
+		}
+	}
+
+	return newFilesUpdates, err
+
+}
+
+// setLocationFromAssociatedTarget sets the location of this component
+// according to an associated target
+func (e *DDIExecution) setLocationFromAssociatedTarget(ctx context.Context, targetCapability string) (string, error) {
+	var locationName string
+	nodeTemplate, err := GetStoredNodeTemplate(ctx, e.DeploymentID, e.NodeName)
+	if err != nil {
+		return locationName, err
+	}
+
+	// Get the associated target node name if any
+	var targetNodeName string
+	for _, nodeReq := range nodeTemplate.Requirements {
+		for _, reqAssignment := range nodeReq {
+			if reqAssignment.Capability == targetCapability {
+				targetNodeName = reqAssignment.Node
+				break
+			}
+		}
+	}
+	if targetNodeName == "" {
+		return locationName, err
+	}
+
+	// Get the target location
+	targetNodeTemplate, err := GetStoredNodeTemplate(ctx, e.DeploymentID, targetNodeName)
+	if err != nil {
+		return locationName, err
+	}
+	var targetLocationName string
+	if targetNodeTemplate.Metadata != nil {
+		targetLocationName = targetNodeTemplate.Metadata[tosca.MetadataLocationNameKey]
+	}
+	if targetLocationName == "" {
+		return locationName, err
+	}
+
+	// Get the corresponding DDI location
+	locationName, err = e.GetDDILocationNameFromInfrastructureLocation(ctx, targetLocationName)
+	if err != nil || locationName == "" {
+		return locationName, err
+	}
+
+	// Store the location name in this node template metadata
+	if nodeTemplate.Metadata == nil {
+		nodeTemplate.Metadata = make(map[string]string)
+	}
+	nodeTemplate.Metadata[tosca.MetadataLocationNameKey] = locationName
+	// Location is now changed for this node template, storing it
+	err = StoreNodeTemplate(ctx, e.DeploymentID, e.NodeName, nodeTemplate)
+	return locationName, err
 }
 
 func (e *DDIExecution) resolveInputs(ctx context.Context) error {

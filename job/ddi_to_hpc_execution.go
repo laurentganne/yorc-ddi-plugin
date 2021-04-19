@@ -16,7 +16,9 @@ package job
 
 import (
 	"context"
-	"path/filepath"
+	"encoding/json"
+	"path"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -26,20 +28,23 @@ import (
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// CloudToDDIJobExecution holds Cloud staging area to DDI data transfer job Execution properties
-type CloudToDDIJobExecution struct {
+// DDIToHPCExecution holds DDI to HPC data transfer job Execution properties
+type DDIToHPCExecution struct {
 	*DDIJobExecution
 }
 
 // Execute executes a synchronous operation
-func (e *CloudToDDIJobExecution) Execute(ctx context.Context) error {
+func (e *DDIToHPCExecution) Execute(ctx context.Context) error {
 
 	var err error
 	switch strings.ToLower(e.Operation.Name) {
 	case installOperation, "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating Job %q", e.NodeName)
-		err = e.setCloudStagingAreaAccessDetails(ctx)
+		var locationName string
+		locationName, err = e.SetLocationFromAssociatedHPCJob(ctx)
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Location for %s is %s", e.NodeName, locationName)
 	case uninstallOperation, "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Deleting Job %q", e.NodeName)
@@ -73,39 +78,75 @@ func (e *CloudToDDIJobExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-func (e *CloudToDDIJobExecution) submitDataTransferRequest(ctx context.Context) error {
+func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error {
 
 	ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
 	if err != nil {
 		return err
 	}
 
-	sourcePath := e.GetValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
+	sourcePath := e.GetValueFromEnvInputs(ddiDatasetPathEnvVar)
 	if sourcePath == "" {
-		return errors.Errorf("Failed to get path of dataset to transfer from Cloud staging area")
+		return errors.Errorf("Failed to get path of dataset to transfer from DDI")
 	}
 
-	sourceSubDirPath := e.GetValueFromEnvInputs(sourceSubDirEnvVar)
-	if sourceSubDirPath != "" {
-		sourcePath = filepath.Join(sourcePath, sourceSubDirPath)
-	}
-
-	sourceFileName := e.GetValueFromEnvInputs(sourceFileNameEnvVar)
-	if sourceFileName != "" {
-		sourcePath = filepath.Join(sourcePath, sourceFileName)
-	}
-
-	destPath := e.GetValueFromEnvInputs(ddiPathEnvVar)
+	destPath := e.GetValueFromEnvInputs(hpcDirectoryPathEnvVar)
 	if destPath == "" {
-		return errors.Errorf("Failed to get path of desired transferred dataset in DDI")
+		return errors.Errorf("Failed to get HPC directory path")
 	}
+
+	serverFQDN := e.GetValueFromEnvInputs(hpcServerEnvVar)
+	if serverFQDN == "" {
+		return errors.Errorf("Failed to get HPC server")
+	}
+
+	res := strings.SplitN(serverFQDN, ".", 2)
+	targetSystem := res[0] + "_home"
+
+	heappeJobIDStr := e.GetValueFromEnvInputs(heappeJobIDEnvVar)
+	if heappeJobIDStr == "" {
+		return errors.Errorf("Failed to get ID of associated job")
+	}
+	heappeJobID, err := strconv.ParseInt(heappeJobIDStr, 10, 64)
+	if err != nil {
+		err = errors.Wrapf(err, "Unexpected Job ID value %q for deployment %s node %s",
+			heappeJobIDStr, e.DeploymentID, e.NodeName)
+		return err
+	}
+
+	taskName := e.GetValueFromEnvInputs(taskNameEnvVar)
+	if taskName == "" {
+		return errors.Errorf("Failed to get task name")
+	}
+
+	strVal := e.GetValueFromEnvInputs(tasksNameIdEnvVar)
+	if strVal == "" {
+		return errors.Errorf("Failed to get map of tasks name-id from associated job")
+	}
+	var tasksNameID map[string]string
+	err = json.Unmarshal([]byte(strVal), &tasksNameID)
+	if err != nil {
+		return errors.Wrapf(err, "Failed to unmarshall map od task name - task id %s", strVal)
+	}
+
+	taskIDStr, found := tasksNameID[taskName]
+	if !found {
+		return errors.Errorf("Failed to find task %s in associated job", taskName)
+	}
+	taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
+	if err != nil {
+		err = errors.Wrapf(err, "Unexpected task ID value %q for deployment %s node %s",
+			taskIDStr, e.DeploymentID, e.NodeName)
+		return err
+	}
+	taskDirPath := path.Join(destPath, taskIDStr)
 
 	metadata, err := e.getMetadata(ctx)
 	if err != nil {
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitCloudToDDIDataTransfer(metadata, e.Token, sourcePath, destPath)
+	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, e.Token, sourcePath, targetSystem, taskDirPath, heappeJobID, taskID)
 	if err != nil {
 		return err
 	}
@@ -114,8 +155,7 @@ func (e *CloudToDDIJobExecution) submitDataTransferRequest(ctx context.Context) 
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		requestIDConsulAttribute, requestID)
 	if err != nil {
-		return errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
+		err = errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
 	}
-
 	return err
 }

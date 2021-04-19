@@ -18,17 +18,17 @@ export CGO_ENABLED=0
 
 build: format
 	@echo "--> Running go build"
-	@cd src && go build -o ../bin/ddi-plugin
+	@mkdir -p ./bin
+	@go build -o bin/ddi-plugin
 	@echo "--> Embedding DDI types in binary"
 	@rm -Rf ./build
 	@mkdir ./build
 	@zip -q -r ./build/embeddedResources.zip ./tosca/ddi-types.yaml
-	@mkdir -p ./bin
 	@cat ./build/embeddedResources.zip >> ./bin/ddi-plugin
 	@zip -A ./bin/ddi-plugin > /dev/null
 
 format:
 	@echo "--> Running go fmt"
-	@cd src && go fmt ./...
+	@go fmt ./...
 
 .PHONY: build format

@@ -17,10 +17,12 @@ package job
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -29,19 +31,27 @@ import (
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// DDIRuntimeToHPCExecution holds DDI to HPC data transfer job Execution properties
-type DDIRuntimeToHPCExecution struct {
+// DDIRuntimeToCloudExecution holds the properties of a data transfer from DDO to cloud
+// of a dataset (or files in this dataset) determined at runtime
+type DDIRuntimeToCloudExecution struct {
 	*DDIJobExecution
 }
 
 // Execute executes a synchronous operation
-func (e *DDIRuntimeToHPCExecution) Execute(ctx context.Context) error {
+func (e *DDIRuntimeToCloudExecution) Execute(ctx context.Context) error {
 
 	var err error
 	switch strings.ToLower(e.Operation.Name) {
 	case installOperation, "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating Job %q", e.NodeName)
+		var locationName string
+		locationName, err = e.SetLocationFromAssociatedCloudInstance(ctx)
+		if err != nil {
+			return err
+		}
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Location for %s is %s", e.NodeName, locationName)
 		err = e.setCloudStagingAreaAccessDetails(ctx)
 	case uninstallOperation, "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
@@ -76,7 +86,7 @@ func (e *DDIRuntimeToHPCExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context) error {
+func (e *DDIRuntimeToCloudExecution) submitDataTransferRequest(ctx context.Context) error {
 
 	ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
 	if err != nil {
@@ -122,9 +132,18 @@ func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context
 		}
 	}
 
+	destPath := e.GetValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
+	timeStampStr := e.GetValueFromEnvInputs(timestampCloudStagingAreaDirEnvVar)
+	addTimestamp, _ := strconv.ParseBool(timeStampStr)
+	if addTimestamp {
+		destPath = fmt.Sprintf("%s_%d", destPath, time.Now().UnixNano()/1000000)
+	}
+
 	var sourcePath string
+	var cloudAreaDirectoryPath string
 	if sourceFilePath != "" {
 		sourcePath = sourceFilePath
+		cloudAreaDirectoryPath = destPath
 		fileName := path.Base(sourcePath)
 		err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 			fileNameConsulAttribute, fileName)
@@ -133,66 +152,15 @@ func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context
 		}
 	} else {
 		sourcePath = sourceDatasetPath
+		cloudAreaDirectoryPath = path.Join(destPath, path.Base(sourceDatasetPath))
 	}
-
-	destPath := e.GetValueFromEnvInputs(hpcDirectoryPathEnvVar)
-	if destPath == "" {
-		return errors.Errorf("Failed to get HPC directory path")
-	}
-
-	serverFQDN := e.GetValueFromEnvInputs(hpcServerEnvVar)
-	if destPath == "" {
-		return errors.Errorf("Failed to get HPC server")
-	}
-
-	res := strings.SplitN(serverFQDN, ".", 2)
-	targetSystem := res[0] + "_home"
-
-	heappeJobIDStr := e.GetValueFromEnvInputs(heappeJobIDEnvVar)
-	if heappeJobIDStr == "" {
-		return errors.Errorf("Failed to get ID of associated job")
-	}
-	heappeJobID, err := strconv.ParseInt(heappeJobIDStr, 10, 64)
-	if err != nil {
-		err = errors.Wrapf(err, "Unexpected Job ID value %q for deployment %s node %s",
-			heappeJobIDStr, e.DeploymentID, e.NodeName)
-		return err
-	}
-
-	taskName := e.GetValueFromEnvInputs(taskNameEnvVar)
-	if taskName == "" {
-		return errors.Errorf("Failed to get task name")
-	}
-
-	strVal := e.GetValueFromEnvInputs(tasksNameIdEnvVar)
-	if strVal == "" {
-		return errors.Errorf("Failed to get map of tasks name-id from associated job")
-	}
-	var tasksNameID map[string]string
-	err = json.Unmarshal([]byte(strVal), &tasksNameID)
-	if err != nil {
-		return errors.Wrapf(err, "Failed to unmarshall map od task name - task id %s", strVal)
-	}
-
-	taskIDStr, found := tasksNameID[taskName]
-	if !found {
-		return errors.Errorf("Failed to find task %s in associated job", taskName)
-	}
-	taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
-	if err != nil {
-		err = errors.Wrapf(err, "Unexpected task ID value %q for deployment %s node %s",
-			taskIDStr, e.DeploymentID, e.NodeName)
-		return err
-	}
-
-	taskDirPath := path.Join(destPath, taskIDStr)
 
 	metadata, err := e.getMetadata(ctx)
 	if err != nil {
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, e.Token, sourcePath, targetSystem, taskDirPath, heappeJobID, taskID)
+	requestID, err := ddiClient.SubmitDDIToCloudDataTransfer(metadata, e.Token, sourcePath, destPath)
 	if err != nil {
 		return err
 	}
@@ -201,7 +169,33 @@ func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		requestIDConsulAttribute, requestID)
 	if err != nil {
-		err = errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
+		return errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
 	}
+
+	// Store the staging area name
+	stagingAreaName := ddiClient.GetCloudStagingAreaName()
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		stagingAreaNameConsulAttribute, stagingAreaName)
+	if err != nil {
+		return errors.Wrapf(err, "Request %s submitted, but failed to store the staging area name %s", requestID, stagingAreaName)
+	}
+	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		dataTransferCapability, stagingAreaNameConsulAttribute, stagingAreaName)
+	if err != nil {
+		return errors.Wrapf(err, "Failed to store staging area name capability attribute value %s", stagingAreaName)
+	}
+
+	// Store the staging area directory path
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		stagingAreaPathConsulAttribute, cloudAreaDirectoryPath)
+	if err != nil {
+		return errors.Wrapf(err, "Request %s submitted, but failed to store the staging area directory path %s", requestID, cloudAreaDirectoryPath)
+	}
+	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		dataTransferCapability, stagingAreaPathConsulAttribute, cloudAreaDirectoryPath)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to store cloud staging area path capability attribute value %s", cloudAreaDirectoryPath)
+	}
+
 	return err
 }

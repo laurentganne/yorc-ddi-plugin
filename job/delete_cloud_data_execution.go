@@ -16,49 +16,54 @@ package job
 
 import (
 	"context"
-	"fmt"
 	"path"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/deployments"
 	"github.com/ystia/yorc/v4/events"
+	"github.com/ystia/yorc/v4/log"
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// DDIToCloudExecution holds DDI to Cloud data transfer job Execution properties
-type DDIToCloudExecution struct {
+// DeleteCloudDataExecution holds Cloud data deletion job Execution properties
+type DeleteCloudDataExecution struct {
 	*DDIJobExecution
 }
 
 // Execute executes a synchronous operation
-func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
+func (e *DeleteCloudDataExecution) Execute(ctx context.Context) error {
 
 	var err error
 	switch strings.ToLower(e.Operation.Name) {
 	case installOperation, "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating Job %q", e.NodeName)
-		err = e.setCloudStagingAreaAccessDetails(ctx)
+		// Nothing to do here
 	case uninstallOperation, "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Deleting Job %q", e.NodeName)
 		// Nothing to do here
 	case tosca.RunnableSubmitOperationName:
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
-			"Submitting data transfer request %q", e.NodeName)
-		err = e.submitDataTransferRequest(ctx)
+			"Submitting Cloud data deletion request %q", e.NodeName)
+		var locationName string
+		locationName, err = e.setLocationFromAssociatedCloudDataTransfer(ctx)
+		if err != nil {
+			return err
+		}
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Location for %s is %s", e.NodeName, locationName)
+		err = e.SubmitCloudStagingAreaDataDeletion(ctx)
 		if err != nil {
 			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
-				"Failed to submit data transfer for node %q, error %s", e.NodeName, err.Error())
+				"Failed to submit Cloud data deletion for node %q, error %s", e.NodeName, err.Error())
 
 		}
 	case tosca.RunnableCancelOperationName:
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
-			"Canceling Job %q", e.NodeName)
+			"Canceling request %q", e.NodeName)
 		/*
 			err = e.cancelJob(ctx)
 			if err != nil {
@@ -76,34 +81,26 @@ func (e *DDIToCloudExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) error {
+// SubmitCloudStagingAreaDataDeletion deletes a dataset from the Cloud staging area
+func (e *DeleteCloudDataExecution) SubmitCloudStagingAreaDataDeletion(ctx context.Context) error {
 
 	ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
 	if err != nil {
 		return err
 	}
 
-	sourcePath := e.GetValueFromEnvInputs(ddiDatasetPathEnvVar)
-	if sourcePath == "" {
-		return errors.Errorf("Failed to get path of dataset to transfer from DDI")
+	dataPath := e.GetValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
+	if dataPath == "" {
+		return errors.Errorf("Failed to get path of dataset to delete from Cloud storage")
 	}
 
-	destPath := e.GetValueFromEnvInputs(cloudStagingAreaDatasetPathEnvVar)
-	timeStampStr := e.GetValueFromEnvInputs(timestampCloudStagingAreaDirEnvVar)
-	addTimestamp, _ := strconv.ParseBool(timeStampStr)
-	if addTimestamp {
-		destPath = fmt.Sprintf("%s_%d", destPath, time.Now().UnixNano()/1000000)
+	// DDI API expects the path to delete to start with a /
+	if len(dataPath) > 0 {
+		dataPath = path.Join("/", dataPath)
 	}
+	log.Printf("Submitting deletion of %s", dataPath)
 
-	// Add the dataset ID to destPath to get the dataset path in staging area
-	datasetCloudAreaPath := path.Join(destPath, path.Base(sourcePath))
-
-	metadata, err := e.getMetadata(ctx)
-	if err != nil {
-		return err
-	}
-
-	requestID, err := ddiClient.SubmitDDIToCloudDataTransfer(metadata, e.Token, sourcePath, destPath)
+	requestID, err := ddiClient.SubmitCloudStagingAreaDataDeletion(e.Token, dataPath)
 	if err != nil {
 		return err
 	}
@@ -112,20 +109,7 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		requestIDConsulAttribute, requestID)
 	if err != nil {
-		return errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
+		err = errors.Wrapf(err, "Request %s submitted, but failed to store this request id", requestID)
 	}
-
-	// Store the staging area directory path
-	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
-		stagingAreaPathConsulAttribute, datasetCloudAreaPath)
-	if err != nil {
-		return errors.Wrapf(err, "Request %s submitted, but failed to store the staging area directory path %s", requestID, destPath)
-	}
-	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
-		dataTransferCapability, stagingAreaPathConsulAttribute, datasetCloudAreaPath)
-	if err != nil {
-		err = errors.Wrapf(err, "Failed to store cloud staging area path capability attribute value %s", destPath)
-	}
-
 	return err
 }

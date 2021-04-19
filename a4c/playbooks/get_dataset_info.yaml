@@ -1,0 +1,32 @@
+- name: Get number of files and size of directory
+  hosts: all
+  strategy: free
+  become: true
+  become_method: sudo
+  tasks:
+    - name: Find all files
+      find:
+        paths: "{{ DATASET_PATH }}"
+        recurse: yes
+        file_type: file
+      register: all_files
+    - name: Get number of files
+      set_fact:
+        NUMBER_OF_FILES: "{{ all_files.matched }}"
+    - name: Get dataset size in bytes
+      command: du -s "{{ DATASET_PATH }}"
+      register: du_result
+    - name: Export this size as an operation output
+      set_fact:
+        SIZE: "{{ du_result.stdout.split()[0] }}"
+    - name: Find small files of size less than 32MB
+      find:
+        paths: "{{ DATASET_PATH }}"
+        recurse: yes
+        file_type: file
+        size: -32m
+      register: small_files
+    - name: Get number of files
+      set_fact:
+        NUMBER_OF_SMALL_FILES: "{{ small_files.matched }}"
+

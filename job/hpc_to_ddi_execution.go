@@ -28,20 +28,23 @@ import (
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// DDIToHPCExecution holds DDI to HPC data transfer job Execution properties
-type DDIToHPCExecution struct {
+// HPCToDDIExecution holds HPC to DDI data transfer job Execution properties
+type HPCToDDIExecution struct {
 	*DDIJobExecution
 }
 
 // Execute executes a synchronous operation
-func (e *DDIToHPCExecution) Execute(ctx context.Context) error {
+func (e *HPCToDDIExecution) Execute(ctx context.Context) error {
 
 	var err error
 	switch strings.ToLower(e.Operation.Name) {
 	case installOperation, "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating Job %q", e.NodeName)
-		err = e.setCloudStagingAreaAccessDetails(ctx)
+		var locationName string
+		locationName, err = e.SetLocationFromAssociatedHPCJob(ctx)
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Location for %s is %s", e.NodeName, locationName)
 	case uninstallOperation, "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Deleting Job %q", e.NodeName)
@@ -75,20 +78,20 @@ func (e *DDIToHPCExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error {
+func (e *HPCToDDIExecution) submitDataTransferRequest(ctx context.Context) error {
 
 	ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
 	if err != nil {
 		return err
 	}
 
-	sourcePath := e.GetValueFromEnvInputs(ddiDatasetPathEnvVar)
-	if sourcePath == "" {
-		return errors.Errorf("Failed to get path of dataset to transfer from DDI")
+	ddiPath := e.GetValueFromEnvInputs(ddiPathEnvVar)
+	if ddiPath == "" {
+		return errors.Errorf("Failed to get DDI path")
 	}
 
-	destPath := e.GetValueFromEnvInputs(hpcDirectoryPathEnvVar)
-	if destPath == "" {
+	jobDirPath := e.GetValueFromEnvInputs(hpcDirectoryPathEnvVar)
+	if jobDirPath == "" {
 		return errors.Errorf("Failed to get HPC directory path")
 	}
 
@@ -98,7 +101,7 @@ func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error
 	}
 
 	res := strings.SplitN(serverFQDN, ".", 2)
-	targetSystem := res[0] + "_home"
+	sourceSystem := res[0] + "_home"
 
 	heappeJobIDStr := e.GetValueFromEnvInputs(heappeJobIDEnvVar)
 	if heappeJobIDStr == "" {
@@ -111,11 +114,8 @@ func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error
 		return err
 	}
 
+	sourcePath := jobDirPath
 	taskName := e.GetValueFromEnvInputs(taskNameEnvVar)
-	if taskName == "" {
-		return errors.Errorf("Failed to get task name")
-	}
-
 	strVal := e.GetValueFromEnvInputs(tasksNameIdEnvVar)
 	if strVal == "" {
 		return errors.Errorf("Failed to get map of tasks name-id from associated job")
@@ -125,25 +125,36 @@ func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error
 	if err != nil {
 		return errors.Wrapf(err, "Failed to unmarshall map od task name - task id %s", strVal)
 	}
-
-	taskIDStr, found := tasksNameID[taskName]
-	if !found {
+	var taskIDStr string
+	if taskName != "" {
+		taskIDStr = tasksNameID[taskName]
+		sourcePath = path.Join(jobDirPath, taskIDStr)
+	} else {
+		// just need to define a task ID for the REST request
+		for _, v := range tasksNameID {
+			taskIDStr = v
+			break
+		}
+	}
+	var taskID int64
+	if taskIDStr == "" {
 		return errors.Errorf("Failed to find task %s in associated job", taskName)
+	} else {
+		taskID, err = strconv.ParseInt(taskIDStr, 10, 64)
+		if err != nil {
+			err = errors.Wrapf(err, "Unexpected Task ID ID value %q for deployment %s node %s",
+				taskIDStr, e.DeploymentID, e.NodeName)
+			return err
+		}
 	}
-	taskID, err := strconv.ParseInt(taskIDStr, 10, 64)
-	if err != nil {
-		err = errors.Wrapf(err, "Unexpected task ID value %q for deployment %s node %s",
-			taskIDStr, e.DeploymentID, e.NodeName)
-		return err
-	}
-	taskDirPath := path.Join(destPath, taskIDStr)
 
 	metadata, err := e.getMetadata(ctx)
 	if err != nil {
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, e.Token, sourcePath, targetSystem, taskDirPath, heappeJobID, taskID)
+	requestID, err := ddiClient.SubmitHPCToDDIDataTransfer(metadata, e.Token, sourceSystem,
+		sourcePath, ddiPath, heappeJobID, taskID)
 	if err != nil {
 		return err
 	}

@@ -116,3 +116,28 @@ type DatasetListing struct {
 	Type     string            `json:"type"`
 	Contents []*DatasetListing `json:"contents,omitempty"`
 }
+
+// ReplicationStatusRequest holds parameters of a replication status request
+type ReplicationStatusRequest struct {
+	TargetSystem string `json:"target_system"`
+	TargetPath   string `json:"target_path"`
+}
+
+// ReplicationStatusResponse holds the status of a replication status request
+type ReplicationStatusResponse struct {
+	Status string `json:"status,omitempty"`
+}
+
+// DatasetInfoRequest holds parameters of a dataset info request
+type DatasetInfoRequest struct {
+	TargetSystem string `json:"target_system"`
+	TargetPath   string `json:"target_path"`
+}
+
+// DatasetInfoResponse holds parameters of a dataset info request response
+type DatasetInfo struct {
+	Result             string `json:"result"`
+	Size               string `json:"size,omitempty"`
+	NumberOfFiles      string `json:"totalfiles,omitempty"`
+	NumberOfSmallFiles string `json:"smallfiles,omitempty"`
+}

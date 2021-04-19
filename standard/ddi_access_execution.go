@@ -19,20 +19,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/laurentganne/yorc-ddi-plugin/v1/common"
-	"github.com/laurentganne/yorc-ddi-plugin/v1/ddi"
+	"github.com/laurentganne/yorc-ddi-plugin/common"
+	"github.com/laurentganne/yorc-ddi-plugin/ddi"
 	"github.com/pkg/errors"
 
-	"github.com/ystia/yorc/v4/config"
-	"github.com/ystia/yorc/v4/deployments"
 	"github.com/ystia/yorc/v4/events"
-	"github.com/ystia/yorc/v4/locations"
 	"github.com/ystia/yorc/v4/prov"
 	"github.com/ystia/yorc/v4/tosca"
-)
-
-const (
-	associatedComputeInstanceRequirementName = "os"
 )
 
 // DDIAccessExecution holds DDI Access Execution properties
@@ -54,7 +47,7 @@ func (e *DDIAccessExecution) Execute(ctx context.Context) error {
 	case "install", "standard.create", "standard.start":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating %q", e.NodeName)
-		ddiClient, err = e.getDDIClientFromAssociatedComputeLocation(ctx)
+		ddiClient, err = e.GetDDIClientFromAssociatedComputeLocation(ctx)
 		if err != nil {
 			return err
 		}
@@ -74,64 +67,4 @@ func (e *DDIAccessExecution) Execute(ctx context.Context) error {
 	}
 
 	return err
-}
-
-func (e *DDIAccessExecution) getDDIClientFromAssociatedComputeLocation(ctx context.Context) (ddi.Client, error) {
-	// First get the associated compute node
-	computeNodeName, err := deployments.GetTargetNodeForRequirementByName(ctx,
-		e.DeploymentID, e.NodeName, associatedComputeInstanceRequirementName)
-	if err != nil {
-		return nil, err
-	}
-
-	locationMgr, err := locations.GetManager(e.Cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	var locationProps config.DynamicMap
-	found, locationName, err := deployments.GetNodeMetadata(ctx, e.DeploymentID,
-		computeNodeName, tosca.MetadataLocationNameKey)
-	if err != nil {
-		return nil, err
-	}
-
-	if found {
-		locationProps, err = e.getDDILocationFromComputeLocation(ctx, locationMgr, locationName)
-	} else {
-		locationProps, err = locationMgr.GetLocationPropertiesForNode(ctx, e.DeploymentID,
-			e.NodeName, common.DDIInfrastructureType)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return ddi.GetClient(locationProps)
-
-}
-func (e *DDIAccessExecution) getDDILocationFromComputeLocation(ctx context.Context,
-	locationMgr locations.Manager, computeLocation string) (config.DynamicMap, error) {
-
-	var locationProps config.DynamicMap
-
-	// Convention: the last 3 letters of this location identiy the datacenter
-	dcID := strings.ToLower(computeLocation[(len(computeLocation) - 3):])
-	locations, err := locationMgr.GetLocations()
-	if err != nil {
-		return locationProps, err
-	}
-
-	for _, loc := range locations {
-		if loc.Type == common.DDIInfrastructureType && strings.HasSuffix(strings.ToLower(loc.Name), dcID) {
-			locationProps, err := locationMgr.GetLocationProperties(loc.Name, common.DDIInfrastructureType)
-			return locationProps, err
-		}
-	}
-
-	// No such location found, returning the default location
-	locationProps, err = locationMgr.GetLocationPropertiesForNode(ctx,
-		e.DeploymentID, e.NodeName, common.DDIInfrastructureType)
-	return locationProps, err
-
 }

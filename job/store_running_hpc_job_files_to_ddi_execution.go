@@ -22,8 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/laurentganne/yorc-ddi-plugin/v1/common"
-	"github.com/laurentganne/yorc-ddi-plugin/v1/ddi"
+	"github.com/laurentganne/yorc-ddi-plugin/ddi"
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/deployments"
@@ -35,7 +34,7 @@ import (
 
 // StoreRunningHPCJobFilesToDDI holds DDI to HPC data transfer job Execution properties
 type StoreRunningHPCJobFilesToDDI struct {
-	*common.DDIExecution
+	*DDIJobExecution
 	MonitoringTimeInterval time.Duration
 }
 
@@ -114,7 +113,10 @@ func (e *StoreRunningHPCJobFilesToDDI) Execute(ctx context.Context) error {
 	case installOperation, "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating Job %q", e.NodeName)
-
+		var locationName string
+		locationName, err = e.SetLocationFromAssociatedHPCJob(ctx)
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Location for %s is %s", e.NodeName, locationName)
 	case uninstallOperation, "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Deleting Job %q", e.NodeName)
@@ -166,7 +168,7 @@ func (e *StoreRunningHPCJobFilesToDDI) Execute(ctx context.Context) error {
 			return errors.Wrapf(err, "Failed to store %s %s %s value %s", e.DeploymentID, e.NodeName, destinationDatasetPathConsulAttribute, "")
 		}
 
-		log.Printf("LOLO created dataset ID %s path %s\n", internalID, datasetPath)
+		log.Debugf("created dataset ID %s path %s\n", internalID, datasetPath)
 
 		// Initializing the stored files attribute that will be updated by the monitoring task
 		storedFiles := make(map[string]StoredFileInfo)

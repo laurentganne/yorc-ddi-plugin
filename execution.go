@@ -20,9 +20,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/laurentganne/yorc-ddi-plugin/v1/common"
-	"github.com/laurentganne/yorc-ddi-plugin/v1/job"
-	"github.com/laurentganne/yorc-ddi-plugin/v1/standard"
+	"github.com/laurentganne/yorc-ddi-plugin/common"
+	"github.com/laurentganne/yorc-ddi-plugin/job"
+	"github.com/laurentganne/yorc-ddi-plugin/standard"
 
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
@@ -31,21 +31,24 @@ import (
 )
 
 const (
-	ddiInfrastructureType                 = "ddi"
-	locationJobMonitoringTimeInterval     = "job_monitoring_time_interval"
-	locationDefaultMonitoringTimeInterval = 5 * time.Second
-	ddiAccessComponentType                = "org.lexis.common.ddi.nodes.DDIAccess"
-	enableCloudStagingAreaJobType         = "org.lexis.common.ddi.nodes.EnableCloudStagingAreaAccessJob"
-	disableCloudStagingAreaJobType        = "org.lexis.common.ddi.nodes.DisableCloudStagingAreaAccessJob"
-	ddiToCloudJobType                     = "org.lexis.common.ddi.nodes.DDIToCloudJob"
-	ddiToHPCTaskJobType                   = "org.lexis.common.ddi.nodes.DDIToHPCTaskJob"
-	hpcToDDIJobType                       = "org.lexis.common.ddi.nodes.pub.HPCToDDIJob"
-	ddiRuntimeToCloudJobType              = "org.lexis.common.ddi.nodes.DDIRuntimeToCloudJob"
-	ddiRuntimeToHPCTaskJobType            = "org.lexis.common.ddi.nodes.DDIRuntimeToHPCTaskJob"
-	cloudToDDIJobType                     = "org.lexis.common.ddi.nodes.CloudToDDIJob"
-	waitForDDIDatasetJobType              = "org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob"
-	storeRunningHPCJobType                = "org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob"
-	deleteCloudDataJobType                = "org.lexis.common.ddi.nodes.DeleteCloudDataJob"
+	ddiInfrastructureType                   = "ddi"
+	locationJobMonitoringTimeInterval       = "job_monitoring_time_interval"
+	locationDefaultMonitoringTimeInterval   = 5 * time.Second
+	ddiAccessComponentType                  = "org.lexis.common.ddi.nodes.DDIAccess"
+	computeInstanceDatasetInfoComponentType = "org.lexis.common.ddi.nodes.GetComputeInstanceDatasetInfo"
+	hpcJobTaskDatasetInfoComponentType      = "org.lexis.common.ddi.nodes.GetHPCJobTaskDatasetInfo"
+	enableCloudStagingAreaJobType           = "org.lexis.common.ddi.nodes.EnableCloudStagingAreaAccessJob"
+	disableCloudStagingAreaJobType          = "org.lexis.common.ddi.nodes.DisableCloudStagingAreaAccessJob"
+	ddiToCloudJobType                       = "org.lexis.common.ddi.nodes.DDIToCloudJob"
+	ddiToHPCTaskJobType                     = "org.lexis.common.ddi.nodes.DDIToHPCTaskJob"
+	hpcToDDIJobType                         = "org.lexis.common.ddi.nodes.pub.HPCToDDIJob"
+	ddiRuntimeToCloudJobType                = "org.lexis.common.ddi.nodes.DDIRuntimeToCloudJob"
+	ddiRuntimeToHPCTaskJobType              = "org.lexis.common.ddi.nodes.DDIRuntimeToHPCTaskJob"
+	cloudToDDIJobType                       = "org.lexis.common.ddi.nodes.CloudToDDIJob"
+	waitForDDIDatasetJobType                = "org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob"
+	storeRunningHPCJobType                  = "org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob"
+	deleteCloudDataJobType                  = "org.lexis.common.ddi.nodes.DeleteCloudDataJob"
+	getDDIDatasetInfoJobType                = "org.lexis.common.ddi.nodes.GetDDIDatasetInfoJob"
 )
 
 // Execution is the interface holding functions to execute an operation
@@ -101,14 +104,77 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		return exec, exec.ResolveExecution(ctx)
 	}
 
+	isComputeDatasetInfoComponent, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, computeInstanceDatasetInfoComponentType)
+	if err != nil {
+		return exec, err
+	}
+
+	if isComputeDatasetInfoComponent {
+		exec = &standard.ComputeDatasetInfoExecution{
+			DDIExecution: &common.DDIExecution{
+				KV:           kv,
+				Cfg:          cfg,
+				DeploymentID: deploymentID,
+				TaskID:       taskID,
+				NodeName:     nodeName,
+				Operation:    operation,
+			},
+		}
+		return exec, exec.ResolveExecution(ctx)
+	}
+
+	isHPCJobTaskDatasetInfo, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, hpcJobTaskDatasetInfoComponentType)
+	if err != nil {
+		return exec, err
+	}
+
+	if isHPCJobTaskDatasetInfo {
+		exec = &standard.HPCDatasetInfoExecution{
+			DDIExecution: &common.DDIExecution{
+				KV:           kv,
+				Cfg:          cfg,
+				DeploymentID: deploymentID,
+				TaskID:       taskID,
+				NodeName:     nodeName,
+				Operation:    operation,
+			},
+		}
+		return exec, exec.ResolveExecution(ctx)
+	}
+
 	// Other executions require a token
-	token, err := deployments.GetStringNodePropertyValue(ctx, deploymentID, nodeName, "token")
+	token, err := deployments.GetStringNodePropertyValue(ctx, deploymentID, nodeName, "accessToken")
 	if err != nil {
 		return exec, err
 	}
 	if token == "" {
 		return exec, errors.Errorf("No value provided for deployement %s node %s proerty token", deploymentID, nodeName)
 	}
+
+	isDDIDatasetInfoJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, getDDIDatasetInfoJobType)
+	if err != nil {
+		return exec, err
+	}
+	if isDDIDatasetInfoJob {
+		exec = &job.DDIDatasetInfoExecution{
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Token:        token,
+					Operation:    operation,
+				},
+				ActionType:             job.GetDDIDatasetInfoAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
+			},
+		}
+
+		return exec, exec.ResolveExecution(ctx)
+	}
+
 	isDeleteCloudDataJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, deleteCloudDataJobType)
 	if err != nil {
 		return exec, err
@@ -303,16 +369,19 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	}
 	if isStoreRunningHPCJobType {
 		exec = &job.StoreRunningHPCJobFilesToDDI{
-			DDIExecution: &common.DDIExecution{
-				KV:           kv,
-				Cfg:          cfg,
-				DeploymentID: deploymentID,
-				TaskID:       taskID,
-				NodeName:     nodeName,
-				Token:        token,
-				Operation:    operation,
+			DDIJobExecution: &job.DDIJobExecution{
+				DDIExecution: &common.DDIExecution{
+					KV:           kv,
+					Cfg:          cfg,
+					DeploymentID: deploymentID,
+					TaskID:       taskID,
+					NodeName:     nodeName,
+					Token:        token,
+					Operation:    operation,
+				},
+				ActionType:             job.StoreRunningHPCJobFilesToDDIAction,
+				MonitoringTimeInterval: monitoringTimeInterval,
 			},
-			MonitoringTimeInterval: monitoringTimeInterval,
 		}
 
 		return exec, exec.ResolveExecution(ctx)

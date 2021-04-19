@@ -25,7 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/laurentganne/yorc-ddi-plugin/v1/ddi"
+	"github.com/laurentganne/yorc-ddi-plugin/common"
+	"github.com/laurentganne/yorc-ddi-plugin/ddi"
 
 	"github.com/pkg/errors"
 
@@ -46,6 +47,8 @@ const (
 	DataTransferAction = "transfer-request-monitoring"
 	// CloudDataDeleteAction is the action of deleting a dataset from Cloud storage
 	CloudDataDeleteAction = "cloud-data-delete-monitoring"
+	// GetDDIDatasetInfoAction is the action of getting info on a dataset (size, number of files)
+	GetDDIDatasetInfoAction = "get-ddi-dataset-info-monitoring"
 	// WaitForDatasetAction is the action of waiting for a dataset to appear in DDI
 	WaitForDatasetAction = "wait-for-dataset"
 	// StoreRunningHPCJobFilesToDDIAction is the action of storing files created/updated
@@ -58,7 +61,7 @@ const (
 	requestStatusFailed         = "FAILED"
 	actionDataNodeName          = "nodeName"
 	actionDataRequestID         = "requestID"
-	actionDataToken             = "token"
+	actionDataToken             = "accessToken"
 	actionDataTaskID            = "taskID"
 	actionDataMetadata          = "metadata"
 	actionDataFilesPatterns     = "files_patterns"
@@ -106,7 +109,8 @@ func (o *ActionOperator) ExecAction(ctx context.Context, cfg config.Configuratio
 	var deregister bool
 	var err error
 	if action.ActionType == DataTransferAction || action.ActionType == CloudDataDeleteAction ||
-		action.ActionType == EnableCloudAccessAction || action.ActionType == DisableCloudAccessAction {
+		action.ActionType == EnableCloudAccessAction || action.ActionType == DisableCloudAccessAction ||
+		action.ActionType == GetDDIDatasetInfoAction {
 		deregister, err = o.monitorJob(ctx, cfg, deploymentID, action)
 	} else if action.ActionType == WaitForDatasetAction {
 		deregister, err = o.monitorDataset(ctx, cfg, deploymentID, action)
@@ -138,6 +142,9 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 
 	var status string
 	var targetPath string
+	var size string
+	var numberOfFiles string
+	var numberOfSmallFiles string
 	switch action.ActionType {
 	case EnableCloudAccessAction:
 		status, err = ddiClient.GetEnableCloudAccessRequestStatus(actionData.token, requestID)
@@ -147,6 +154,8 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 		status, targetPath, err = ddiClient.GetDataTransferRequestStatus(actionData.token, requestID)
 	case CloudDataDeleteAction:
 		status, err = ddiClient.GetDeletionRequestStatus(actionData.token, requestID)
+	case GetDDIDatasetInfoAction:
+		status, size, numberOfFiles, numberOfSmallFiles, err = ddiClient.GetDDIDatasetInfoRequestStatus(actionData.token, requestID)
 	default:
 		err = errors.Errorf("Unsupported action %s", action.ActionType)
 	}
@@ -168,6 +177,8 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 	case status == ddi.TaskStatusCloudAccessEnabledMsg:
 		requestStatus = requestStatusCompleted
 	case status == ddi.TaskStatusDisabledMsg:
+		requestStatus = requestStatusCompleted
+	case status == ddi.TaskStatusDoneMsg:
 		requestStatus = requestStatusCompleted
 	case strings.HasPrefix(status, ddi.TaskStatusFailureMsgPrefix):
 		if strings.HasSuffix(status, ddi.TaskStatusMsgSuffixAlreadyEnabled) {
@@ -215,6 +226,25 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 			if err != nil {
 				return false, errors.Wrapf(err, "Failed to store DDI dataset path capability attribute value %s", destPath)
 			}
+		} else if action.ActionType == GetDDIDatasetInfoAction {
+			// Store dataset info
+			e := common.DDIExecution{
+				DeploymentID: deploymentID,
+				NodeName:     actionData.nodeName,
+			}
+			err = e.SetDatasetInfoCapabilitySizeAttribute(ctx, size)
+			if err != nil {
+				return false, err
+			}
+			err = e.SetDatasetInfoCapabilityNumberOfFilesAttribute(ctx, numberOfFiles)
+			if err != nil {
+				return false, err
+			}
+			err = e.SetDatasetInfoCapabilityNumberOfSmallFilesAttribute(ctx, numberOfSmallFiles)
+			if err != nil {
+				return false, err
+			}
+
 		}
 
 		// job has been done successfully : unregister monitoring
@@ -274,6 +304,7 @@ func (o *ActionOperator) monitorDataset(ctx context.Context, cfg config.Configur
 
 	}
 
+	// TODO: checl all DDI clients
 	ddiClient, err := getDDIClient(ctx, cfg, deploymentID, actionData.nodeName)
 	if err != nil {
 		return true, err
@@ -456,19 +487,14 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		return false, errors.Wrapf(err, "Failed to get env inputs for %s", operationStr)
 	}
 
-	log.Printf("LOLO env inputs: %+v\n", envInputs)
-
 	jobState := strings.ToLower(o.getValueFromEnv(jobStateEnvVar, envInputs))
 	var jobDone bool
 	switch jobState {
 	case "initial", "creating", "created", "submitting", "submitted", "pending":
-		log.Printf("LOLO Job state %s, nothing to do yet", jobState)
 		return deregister, err
 	case "executed", "completed", "failed", "canceled":
-		log.Printf("LOLO job done with state %s", jobState)
 		jobDone = true
 	default:
-		log.Printf("LOLO job state %s not yet done", jobState)
 		jobDone = false
 	}
 
@@ -484,8 +510,6 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		datasetPath = val.RawString()
 	}
 
-	log.Printf("LOLO dataset path %s\n", datasetPath)
-
 	// Get details on files already stored
 	var storedFiles map[string]StoredFileInfo
 	val, err = deployments.GetInstanceAttributeValue(ctx, deploymentID, actionData.nodeName, "0", storedFilesConsulAttribute)
@@ -497,8 +521,6 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		}
 	}
 
-	log.Printf("LOLO stored files %+v\n", storedFiles)
-
 	// Get details of files to be stored
 	var toBeStoredFiles map[string]ToBeStoredFileInfo
 	val, err = deployments.GetInstanceAttributeValue(ctx, deploymentID, actionData.nodeName, "0", toBeStoredFilesConsulAttribute)
@@ -509,8 +531,6 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 			return true, err
 		}
 	}
-
-	log.Printf("LOLO to be stored files %+v\n", toBeStoredFiles)
 
 	// The task ID has to be added as prefix to file patterns if a task name was specified
 	strVal := o.getValueFromEnv(tasksNameIdEnvVar, envInputs)
@@ -555,11 +575,9 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		}
 	}
 
-	log.Printf("LOLO file patterns %+v\n", filesPatterns)
-
-	startDateStr := o.getValueFromEnv(jobStartDataEnvVar, envInputs)
+	startDateStr := o.getValueFromEnv(jobStartDateEnvVar, envInputs)
 	if startDateStr == "" {
-		log.Printf("LOLO Nothing to store yet for %s %s, related HEAppE job not yet started", deploymentID, actionData.nodeName)
+		log.Debugf("Nothing to store yet for %s %s, related HEAppE job not yet started", deploymentID, actionData.nodeName)
 		return deregister, err
 	}
 
@@ -574,7 +592,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	changedFilesStr := o.getValueFromEnv(jobChangedFilesEnvVar, envInputs)
 
 	if changedFilesStr == "" {
-		log.Printf("LOLO Nothing to store yet for %s %s, related HEAppE job has not yet created/updated files", deploymentID, actionData.nodeName)
+		log.Debugf("Nothing to store yet for %s %s, related HEAppE job has not yet created/updated files", deploymentID, actionData.nodeName)
 		return deregister, err
 
 	}
@@ -591,7 +609,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	for _, changedFile := range changedFiles {
 		changedTime, err := time.Parse(layout, changedFile.LastModifiedDate)
 		if err != nil {
-			log.Printf("LOLO Deployment %s node %s ignoring last modified date %s which has not the expected layout %s",
+			log.Debugf("Deployment %s node %s ignoring last modified date %s which has not the expected layout %s",
 				deploymentID, actionData.nodeName, changedFile.LastModifiedDate, layout)
 			continue
 		}
@@ -607,19 +625,19 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 					delete(storedFiles, changedFile.FileName)
 				}
 			}
-			matches, err := o.matchesFilter(changedFile.FileName, filesPatterns)
+			matches, err := common.MatchesFilter(changedFile.FileName, filesPatterns)
 			if err != nil {
 				return true, errors.Wrapf(err, "Failed to check if file %s matches filters %v", changedFile.FileName, filesPatterns)
 			}
 			if matches {
 				newFilesUpdates = append(newFilesUpdates, changedFile)
 			} else {
-				log.Printf("LOLO ignoring file %s not matching patterns %+v\n", changedFile.FileName, filesPatterns)
+				log.Debugf("ignoring file %s not matching patterns %+v\n", changedFile.FileName, filesPatterns)
 			}
 		}
 	}
 
-	log.Printf("LOLO new files updates: %+v\n", newFilesUpdates)
+	log.Debugf("new files updates: %+v\n", newFilesUpdates)
 
 	// Update the maps of files to be stored
 	toBeStoredUpdated := make(map[string]ToBeStoredFileInfo)
@@ -627,7 +645,6 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	currentTime := time.Now()
 	layout = "2006-01-02T15:04:05.00Z"
 	currentDate := currentTime.Format(layout)
-	log.Printf("LOLO current date: %+sn", currentDate)
 	for _, changedFile := range newFilesUpdates {
 		if jobDone {
 			toStore[changedFile.FileName] = changedFile
@@ -656,7 +673,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		}
 	}
 
-	log.Printf("LOLO Files to be stored updated: %+v\n", toBeStoredUpdated)
+	log.Debugf("Files to be stored updated: %+v\n", toBeStoredUpdated)
 
 	// Save the new to be stored values
 	err = deployments.SetAttributeComplexForAllInstances(ctx, deploymentID, actionData.nodeName,
@@ -698,7 +715,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 			return true, errors.Wrapf(err, "Failed to submit data transfer of %s to DDI", sourcePath)
 		}
 
-		log.Printf("LOLO Submitted request to store %s request_id %s\n", sourcePath, requestID)
+		log.Debugf("Submitted request to store %s request_id %s\n", sourcePath, requestID)
 
 		storedFiles[name] = StoredFileInfo{
 			LastModifiedDate: details.LastModifiedDate,
@@ -706,7 +723,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		}
 	}
 
-	log.Printf("LOLO Files stored updated: %+v\n", storedFiles)
+	log.Debugf("Files stored updated: %+v\n", storedFiles)
 
 	// Save the new stored values
 	err = deployments.SetAttributeComplexForAllInstances(ctx, deploymentID, actionData.nodeName,
@@ -721,19 +738,6 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	return deregister, err
 }
 
-func (o *ActionOperator) matchesFilter(fileName string, filesPatterns []string) (bool, error) {
-	for _, fPattern := range filesPatterns {
-		matched, err := regexp.MatchString(fPattern, fileName)
-		if err != nil {
-			return false, err
-		}
-		if matched {
-			return true, err
-		}
-	}
-
-	return (len(filesPatterns) == 0), nil
-}
 func (o *ActionOperator) getValueFromEnv(envVarName string, envVars []*operations.EnvInput) string {
 
 	var result string

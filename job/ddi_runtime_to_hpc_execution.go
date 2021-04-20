@@ -162,6 +162,11 @@ func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context
 		return err
 	}
 
+	heappeURL := e.GetValueFromEnvInputs(heappeURLEnvVar)
+	if heappeURL == "" {
+		return errors.Errorf("Failed to get HEAppE URL of job %d", heappeJobID)
+	}
+
 	taskName := e.GetValueFromEnvInputs(taskNameEnvVar)
 	if taskName == "" {
 		return errors.Errorf("Failed to get task name")
@@ -195,7 +200,7 @@ func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, e.Token, sourcePath, targetSystem, taskDirPath, heappeJobID, taskID)
+	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, e.Token, sourcePath, targetSystem, taskDirPath, heappeURL, heappeJobID, taskID)
 	if err != nil {
 		return err
 	}

@@ -61,6 +61,7 @@ const (
 	hpcDirectoryPathEnvVar                = "HPC_DIRECTORY_PATH"
 	hpcServerEnvVar                       = "HPC_SERVER"
 	heappeJobIDEnvVar                     = "HEAPPE_JOB_ID"
+	heappeURLEnvVar                       = "HEAPPE_URL"
 	tasksNameIdEnvVar                     = "TASKS_NAME_ID"
 	taskNameEnvVar                        = "TASK_NAME"
 	ipAddressEnvVar                       = "IP_ADDRESS"

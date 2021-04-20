@@ -106,8 +106,8 @@ node_types:
     description: >
       Enable the access to the Cloud Staging Area for a Compute Instance
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
     # Atributes added here in addition to capability attributes, so that they
@@ -153,7 +153,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
@@ -169,8 +169,8 @@ node_types:
     description: >
       Disable the access to the Cloud Staging Area for a Compute Instance
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
     attributes:
@@ -196,7 +196,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
@@ -213,8 +213,8 @@ node_types:
     description: >
       Transfer datasets from DDI to Cloud staging area (abstract)
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       ddi_dataset_path:
@@ -261,7 +261,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
@@ -284,8 +284,8 @@ node_types:
     description: >
       Transfer data from Cloud staging area to DDI (abstract)
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       metadata:
@@ -332,7 +332,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             SOURCE_SUBDIRECTORY:  { get_property: [SELF, source_subdirectory] }
@@ -356,8 +356,8 @@ node_types:
     description: >
       Delete a dataset from Cloud staging area (abstract)
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
     attributes:
@@ -385,7 +385,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_dataset_provider, staging_area_directory_path] }
@@ -406,8 +406,8 @@ node_types:
     description: >
       Transfer datasets from DDI to HPC staging area for a given task in the job (abstract)
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       metadata:
@@ -451,13 +451,14 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
             HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
             HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
             HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            HEAPPE_URL: {get_attribute: [REQ_TARGET, job, heappe_url]}
             TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
             TASK_NAME: {get_property: [SELF, task_name]}
           implementation:
@@ -477,8 +478,8 @@ node_types:
     description: >
       Transfer data from an HPC job to DDI (abstract)
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       metadata:
@@ -522,12 +523,13 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
             HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
             HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            HEAPPE_URL: {get_attribute: [REQ_TARGET, job, heappe_url]}
             TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
             TASK_NAME: {get_property: [SELF, task_name]}
             DDI_PATH: { get_property: [SELF, ddi_path] }
@@ -548,8 +550,8 @@ node_types:
     description: >
       Transfer files from an HPC running job to DDI until this HPC job ends (abstract)
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       metadata:
@@ -608,7 +610,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           implementation:
             file: ddi-types-a4c.yaml
@@ -618,6 +620,7 @@ node_types:
             HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
             HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
             HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            HEAPPE_URL: {get_attribute: [REQ_TARGET, job, heappe_url]}
             TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
             JOB_CHANGED_FILES: {get_attribute: [REQ_TARGET, job, changed_files]}
             JOB_START_DATE: {get_attribute: [REQ_TARGET, job, start_date]}
@@ -663,8 +666,8 @@ node_types:
     description: >
       Wait for a dataset to appear in DDI, and optionally wait for files in this dataset (abstract)
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       metadata:
@@ -704,7 +707,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             METADATA: { get_property: [SELF, metadata] }
@@ -726,8 +729,8 @@ node_types:
     description: >
       Transfer from DDI to Cloud staging area, a dataset (or one dataset file) selected at runtime (abstract)
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       file_pattern:
@@ -784,7 +787,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_attribute: [REQ_TARGET, dataset_files, dataset_path] }
@@ -809,8 +812,8 @@ node_types:
     description: >
       Transfer from DDI to HPC staging area, a dataset (or one dataset file) selected at runtime (abstract)
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       task_name:
@@ -859,7 +862,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_attribute: [REQ_TARGET, dataset_files, dataset_path] }
@@ -867,6 +870,7 @@ node_types:
             HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
             HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
             HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            HEAPPE_URL: {get_attribute: [REQ_TARGET, job, heappe_url]}
             TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
             FILE_PATTERN: { get_property: [SELF, file_pattern] }
             TASK_NAME: {get_property: [SELF, task_name]}
@@ -907,8 +911,8 @@ node_types:
     description: >
       Get DDI dataset info
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       dataset_path:
@@ -921,7 +925,7 @@ node_types:
     interfaces:
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, dataset_path] }
@@ -990,6 +994,7 @@ node_types:
             JOB_CHANGED_FILES: {get_attribute: [REQ_TARGET, job, changed_files]}
             JOB_START_DATE: {get_attribute: [REQ_TARGET, job, start_date]}
             HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            HEAPPE_URL: {get_attribute: [REQ_TARGET, job, heappe_url]}
             TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
             TASK_NAME: {get_property: [SELF, task_name]}
             NEEDED_FILES_PATTERNS: { get_property: [SELF, needed_files_patterns] }

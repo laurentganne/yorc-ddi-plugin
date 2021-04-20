@@ -89,8 +89,8 @@ type Client interface {
 	SubmitDDIDatasetInfoRequest(token, targetSystem, ddiPath string) (string, error)
 	SubmitDDIDataDeletion(token, path string) (string, error)
 	SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
-	SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath string, jobID, taskID int64) (string, error)
-	SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath string, jobID, taskID int64) (string, error)
+	SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath, heappeURL string, jobID, taskID int64) (string, error)
+	SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath, heappeURL string, jobID, taskID int64) (string, error)
 	GetCloudStagingAreaProperties() LocationCloudStagingArea
 	GetDDIDatasetInfoRequestStatus(token, requestID string) (string, string, string, string, error)
 	GetDataTransferRequestStatus(token, requestID string) (string, string, error)
@@ -328,7 +328,7 @@ func (d *ddiClient) SubmitCloudStagingAreaDataDeletion(token, path string) (stri
 }
 
 // SubmitDDIToHPCDataTransfer submits a data transfer request from DDI to HPC
-func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath string, jobID, taskID int64) (string, error) {
+func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath, heappeURL string, jobID, taskID int64) (string, error) {
 
 	request := HPCDataTransferRequest{
 		DataTransferRequest{
@@ -338,9 +338,10 @@ func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSour
 			TargetSystem: targetSystem,
 			TargetPath:   hpcDirectoryPath,
 		},
-		DataTransferRequestHPCExectension{
-			JobID:  jobID,
-			TaskID: taskID,
+		DataTransferRequestHPCExtension{
+			HEAppEURL: heappeURL,
+			JobID:     jobID,
+			TaskID:    taskID,
 		},
 	}
 
@@ -351,14 +352,14 @@ func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSour
 	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingStageREST,
 		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed to submit DDI %s to HPC %s %s data transfer", ddiSourcePath, targetSystem, hpcDirectoryPath)
+		err = errors.Wrapf(err, "Failed to submit DDI %s to HPC %s %s %s data transfer", ddiSourcePath, heappeURL, targetSystem, hpcDirectoryPath)
 	}
 
 	return response.RequestID, err
 }
 
 // SubmitHPCToDDIDataTransfer submits a data transfer request from HPC to DDI
-func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath string, jobID, taskID int64) (string, error) {
+func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath, heappeURL string, jobID, taskID int64) (string, error) {
 
 	request := HPCDataTransferRequest{
 		DataTransferRequest{
@@ -368,9 +369,10 @@ func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceS
 			TargetSystem: d.ddiArea,
 			TargetPath:   ddiPath,
 		},
-		DataTransferRequestHPCExectension{
-			JobID:  jobID,
-			TaskID: taskID,
+		DataTransferRequestHPCExtension{
+			HEAppEURL: heappeURL,
+			JobID:     jobID,
+			TaskID:    taskID,
 		},
 	}
 
@@ -381,7 +383,7 @@ func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceS
 	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingStageREST,
 		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed to submit HPC %s %s to DDI %s data transfer", sourceSystem, hpcDirectoryPath, ddiPath)
+		err = errors.Wrapf(err, "Failed to submit HPC %s %s %s to DDI %s data transfer", heappeURL, sourceSystem, hpcDirectoryPath, ddiPath)
 	}
 
 	return response.RequestID, err

@@ -61,7 +61,7 @@ const (
 	requestStatusFailed         = "FAILED"
 	actionDataNodeName          = "nodeName"
 	actionDataRequestID         = "requestID"
-	actionDataToken             = "accessToken"
+	actionDataToken             = "token"
 	actionDataTaskID            = "taskID"
 	actionDataMetadata          = "metadata"
 	actionDataFilesPatterns     = "files_patterns"
@@ -706,11 +706,16 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		return true, err
 	}
 
+	heappeURL := o.getValueFromEnv(heappeURLEnvVar, envInputs)
+	if heappeURL == "" {
+		return true, errors.Errorf("Failed to get HEAppE URL of job %d", heappeJobID)
+	}
+
 	for name, details := range toStore {
 		sourcePath := path.Join(jobDirPath, name)
 		var metadata ddi.Metadata
 		requestID, err := ddiClient.SubmitHPCToDDIDataTransfer(metadata, actionData.token, sourceSystem,
-			sourcePath, datasetPath, heappeJobID, taskID)
+			sourcePath, datasetPath, heappeURL, heappeJobID, taskID)
 		if err != nil {
 			return true, errors.Wrapf(err, "Failed to submit data transfer of %s to DDI", sourcePath)
 		}

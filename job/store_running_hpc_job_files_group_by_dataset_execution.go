@@ -148,7 +148,6 @@ func (e *StoreRunningHPCJobFilesGroupByDataset) ExecuteAsync(ctx context.Context
 	data := make(map[string]string)
 	data[actionDataTaskID] = e.TaskID
 	data[actionDataNodeName] = e.NodeName
-	data[actionDataToken] = e.Token
 	data[actionDataFilesPatterns] = filesPatternsStr
 	data[actionDataElapsedTime] = elapsedTimeStr
 	data[actionDataTaskName] = taskName

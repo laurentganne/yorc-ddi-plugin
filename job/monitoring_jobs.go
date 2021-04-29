@@ -64,7 +64,6 @@ const (
 	requestStatusFailed         = "FAILED"
 	actionDataNodeName          = "nodeName"
 	actionDataRequestID         = "requestID"
-	actionDataToken             = "token"
 	actionDataTaskID            = "taskID"
 	actionDataDDIProjectName    = "ddiProjectName"
 	actionDataMetadata          = "metadata"
@@ -124,7 +123,6 @@ type DatasetReplicationInfo struct {
 }
 
 type actionData struct {
-	token    string
 	taskID   string
 	nodeName string
 }
@@ -193,6 +191,11 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 		return true, err
 	}
 
+	token, err := common.GetAccessToken(ctx, deploymentID, actionData.nodeName)
+	if err != nil {
+		return true, err
+	}
+
 	var status string
 	var targetPath string
 	var size string
@@ -200,15 +203,15 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 	var numberOfSmallFiles string
 	switch action.ActionType {
 	case EnableCloudAccessAction:
-		status, err = ddiClient.GetEnableCloudAccessRequestStatus(actionData.token, requestID)
+		status, err = ddiClient.GetEnableCloudAccessRequestStatus(token, requestID)
 	case DisableCloudAccessAction:
-		status, err = ddiClient.GetDisableCloudAccessRequestStatus(actionData.token, requestID)
+		status, err = ddiClient.GetDisableCloudAccessRequestStatus(token, requestID)
 	case DataTransferAction:
-		status, targetPath, err = ddiClient.GetDataTransferRequestStatus(actionData.token, requestID)
+		status, targetPath, err = ddiClient.GetDataTransferRequestStatus(token, requestID)
 	case CloudDataDeleteAction:
-		status, err = ddiClient.GetDeletionRequestStatus(actionData.token, requestID)
+		status, err = ddiClient.GetDeletionRequestStatus(token, requestID)
 	case GetDDIDatasetInfoAction:
-		status, size, numberOfFiles, numberOfSmallFiles, err = ddiClient.GetDDIDatasetInfoRequestStatus(actionData.token, requestID)
+		status, size, numberOfFiles, numberOfSmallFiles, err = ddiClient.GetDDIDatasetInfoRequestStatus(token, requestID)
 	default:
 		err = errors.Errorf("Unsupported action %s", action.ActionType)
 	}
@@ -378,8 +381,13 @@ func (o *ActionOperator) monitorDataset(ctx context.Context, cfg config.Configur
 		return true, errors.Errorf("Unsupported action %s", action.ActionType)
 	}
 
+	token, err := common.GetAccessToken(ctx, deploymentID, actionData.nodeName)
+	if err != nil {
+		return true, err
+	}
+
 	// First search if there is a dataset with the expected metadata
-	results, err := ddiClient.SearchDataset(actionData.token, metadata)
+	results, err := ddiClient.SearchDataset(token, metadata)
 	if err != nil {
 		return true, errors.Wrapf(err, "failed search datasets with metadata %v", metadata)
 	}
@@ -395,7 +403,7 @@ func (o *ActionOperator) monitorDataset(ctx context.Context, cfg config.Configur
 	for _, datasetRes := range results {
 		var listing ddi.DatasetListing
 		if len(filesPatterns) > 0 {
-			listing, err = ddiClient.ListDataSet(actionData.token, datasetRes.Location.InternalID,
+			listing, err = ddiClient.ListDataSet(token, datasetRes.Location.InternalID,
 				datasetRes.Location.Access, datasetRes.Location.Project, true)
 			if err != nil {
 				return true, errors.Wrapf(err, "failed to get contents of dataset %s", datasetRes.Location.InternalID)
@@ -813,6 +821,11 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		return true, errors.Errorf("Failed to get HEAppE URL of job %d", heappeJobID)
 	}
 
+	token, err := common.GetAccessToken(ctx, deploymentID, actionData.nodeName)
+	if err != nil {
+		return true, err
+	}
+
 	for name, fileDetails := range toStore {
 		hpcJobMonitoringInfo := hpcJobMonitoringInfo{
 			deploymentID:     deploymentID,
@@ -824,12 +837,12 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 			replicationSites: replicationSites,
 		}
 
-		destPath, err := o.setDestinationDatasetPath(ctx, ddiClient, hpcJobMonitoringInfo, datasetReplication, actionData.token)
+		destPath, err := o.setDestinationDatasetPath(ctx, ddiClient, hpcJobMonitoringInfo, datasetReplication, token)
 		if err != nil {
 			return true, err
 		}
 		sourcePath := path.Join(jobDirPath, name)
-		requestID, err := ddiClient.SubmitHPCToDDIDataTransfer(metadata, actionData.token, sourceSystem,
+		requestID, err := ddiClient.SubmitHPCToDDIDataTransfer(metadata, token, sourceSystem,
 			sourcePath, destPath, heappeURL, heappeJobID, taskID)
 		if err != nil {
 			return true, errors.Wrapf(err, "Failed to submit data transfer of %s to DDI", sourcePath)
@@ -848,7 +861,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 
 	// Get an update of data transfer requests status
 	hpcTransferInfo := hpcTransferContextInfo{
-		token:            actionData.token,
+		token:            token,
 		deploymentID:     deploymentID,
 		nodeName:         actionData.nodeName,
 		jobID:            heappeJobID,
@@ -1210,11 +1223,6 @@ func (o *ActionOperator) getActionData(action *prov.Action) (*actionData, error)
 	actionData.nodeName, ok = action.Data[actionDataNodeName]
 	if !ok {
 		return actionData, errors.Errorf("Missing mandatory information nodeName for actionType:%q", action.ActionType)
-	}
-	// Check token
-	actionData.token, ok = action.Data[actionDataToken]
-	if !ok {
-		return actionData, errors.Errorf("Missing mandatory information token for actionType:%q", action.ActionType)
 	}
 	// Check taskID
 	actionData.taskID, ok = action.Data[actionDataTaskID]

@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
+	"github.com/ystia/yorc/v4/events"
 	"github.com/ystia/yorc/v4/locations"
 	"github.com/ystia/yorc/v4/prov"
 )
@@ -143,13 +145,98 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		return exec, exec.ResolveExecution(ctx)
 	}
 
-	// Other executions require a token
-	token, err := deployments.GetStringNodePropertyValue(ctx, deploymentID, nodeName, "token")
+	ids, err := deployments.GetNodeInstancesIds(ctx, deploymentID, nodeName)
 	if err != nil {
 		return exec, err
 	}
-	if token == "" {
-		return exec, errors.Errorf("No value provided for deployement %s node %s proerty token", deploymentID, nodeName)
+
+	if len(ids) == 0 {
+		return exec, errors.Errorf("Found no instance for node %s in deployment %s", nodeName, deploymentID)
+	}
+
+	// Getting an AAI client to check token validity
+	aaiClient := common.GetAAIClient(locationProps)
+
+	var accessToken, refreshToken string
+	val, err := deployments.GetInstanceAttributeValue(ctx, deploymentID, nodeName, ids[0], common.AccessTokenConsulAttribute)
+	if err != nil {
+		return nil, err
+	}
+	if val != nil {
+		accessToken = val.RawString()
+	}
+
+	if accessToken == "" {
+		token, err := deployments.GetStringNodePropertyValue(ctx, deploymentID,
+			nodeName, "token")
+		if err != nil {
+			return exec, err
+		}
+
+		if token == "" {
+			return exec, errors.Errorf("Found no token node %s in deployment %s", nodeName, deploymentID)
+		}
+
+		valid, err := aaiClient.IsAccessTokenValid(ctx, token)
+		if err != nil {
+			return exec, errors.Wrapf(err, "Failed to check validity of token")
+		}
+
+		if !valid {
+			errorMsg := fmt.Sprintf("Token provided in input for Job %s is not anymore valid", nodeName)
+			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelERROR, deploymentID).Registerf(errorMsg)
+			return exec, errors.Errorf(errorMsg)
+		}
+		// Exchange this token for an access and a refresh token for the orchestrator
+		accessToken, refreshToken, err = aaiClient.ExchangeToken(ctx, token)
+		if err != nil {
+			return exec, errors.Wrapf(err, "Failed to exchange token for orchestrator")
+		}
+
+		// Store these values
+		err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
+			common.AccessTokenConsulAttribute, accessToken)
+		if err != nil {
+			return exec, errors.Wrapf(err, "Job %s, failed to store access token", nodeName)
+		}
+		err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
+			common.RefreshTokenConsulAttribute, refreshToken)
+		if err != nil {
+			return exec, errors.Wrapf(err, "Job %s, failed to store refresh token", nodeName)
+		}
+
+	} else {
+		val, err = deployments.GetInstanceAttributeValue(ctx, deploymentID, nodeName, ids[0], common.RefreshTokenConsulAttribute)
+		if err != nil {
+			return exec, err
+		}
+		if val != nil {
+			refreshToken = val.RawString()
+		}
+	}
+
+	// Checking the access token validity
+	valid, err := aaiClient.IsAccessTokenValid(ctx, accessToken)
+	if err != nil {
+		return exec, errors.Wrapf(err, "Failed to check validity of access token")
+	}
+
+	if !valid {
+		accessToken, refreshToken, err = aaiClient.RefreshToken(ctx, refreshToken)
+		if err != nil {
+			return exec, errors.Wrapf(err, "Failed to refresh token for orchestrator")
+		}
+		// Store these values
+		err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
+			common.AccessTokenConsulAttribute, accessToken)
+		if err != nil {
+			return exec, errors.Wrapf(err, "Job %s, failed to store access token", nodeName)
+		}
+		err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
+			common.RefreshTokenConsulAttribute, refreshToken)
+		if err != nil {
+			return exec, errors.Wrapf(err, "Job %s, failed to store refresh token", nodeName)
+		}
 	}
 
 	isDDIDatasetInfoJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, getDDIDatasetInfoJobType)
@@ -165,7 +252,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
 				},
 				ActionType:             job.GetDDIDatasetInfoAction,
@@ -189,7 +275,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
 				},
 				ActionType:             job.CloudDataDeleteAction,
@@ -212,7 +297,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
 				},
 				ActionType:             job.DataTransferAction,
@@ -236,7 +320,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
 				},
 				ActionType:             job.DataTransferAction,
@@ -260,7 +343,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
 				},
 				ActionType:             job.DataTransferAction,
@@ -284,7 +366,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
 				},
 				ActionType:             job.DataTransferAction,
@@ -308,7 +389,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
 				},
 				ActionType:             job.DataTransferAction,
@@ -332,7 +412,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
 				},
 				ActionType:             job.DataTransferAction,
@@ -355,7 +434,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				DeploymentID: deploymentID,
 				TaskID:       taskID,
 				NodeName:     nodeName,
-				Token:        token,
 				Operation:    operation,
 			},
 			MonitoringTimeInterval: monitoringTimeInterval,
@@ -377,7 +455,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				DeploymentID: deploymentID,
 				TaskID:       taskID,
 				NodeName:     nodeName,
-				Token:        token,
 				Operation:    operation,
 			},
 			MonitoringTimeInterval: monitoringTimeInterval,
@@ -398,7 +475,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				DeploymentID: deploymentID,
 				TaskID:       taskID,
 				NodeName:     nodeName,
-				Token:        token,
 				Operation:    operation,
 			},
 			MonitoringTimeInterval: monitoringTimeInterval,
@@ -421,7 +497,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
 				},
 				ActionType:             job.EnableCloudAccessAction,
@@ -445,7 +520,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
 				},
 				ActionType:             job.DisableCloudAccessAction,

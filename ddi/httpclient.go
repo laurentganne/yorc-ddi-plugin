@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -32,10 +33,11 @@ import (
 
 type httpclient struct {
 	*http.Client
-	baseURL string
+	baseURL          string
+	refreshTokenFunc RefreshTokenFunc
 }
 
-func getHTTPClient(URL string) *httpclient {
+func getHTTPClient(URL string, refreshTokenFunc RefreshTokenFunc) *httpclient {
 
 	tr := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -48,8 +50,9 @@ func getHTTPClient(URL string) *httpclient {
 	}
 
 	return &httpclient{
-		baseURL: URL,
-		Client:  &http.Client{Transport: tr},
+		baseURL:          URL,
+		refreshTokenFunc: refreshTokenFunc,
+		Client:           &http.Client{Transport: tr},
 	}
 }
 
@@ -75,29 +78,46 @@ func (c *httpclient) doRequest(method, path string, expectedStatuses []int, toke
 	if err != nil {
 		return err
 	}
-	if token != "" {
-		request.Header.Add("Authorization", fmt.Sprintf("Basic %s", token))
-	}
-	request.Header.Add("Content-Type", "application/json")
-	request.Header.Add("Accept", "application/json")
 
-	response, err := c.Do(request)
-	if err != nil {
-		return err
-	}
+	tokenRefreshed := (token == "")
+	done := false
+	newToken := token
+	var response *http.Response
 
-	defer response.Body.Close()
+	for !done {
+		if newToken != "" {
+			request.Header.Add("Authorization", fmt.Sprintf("Basic %s", newToken))
+		}
+		request.Header.Add("Content-Type", "application/json")
+		request.Header.Add("Accept", "application/json")
 
-	foundExpectedStatus := false
-	for _, expectedStatus := range expectedStatuses {
-		if response.StatusCode == expectedStatus {
-			foundExpectedStatus = true
-			break
+		response, err = c.Do(request)
+		if err != nil {
+			return err
+		}
+
+		defer response.Body.Close()
+		done = true
+		foundExpectedStatus := false
+		for _, expectedStatus := range expectedStatuses {
+			if response.StatusCode == expectedStatus {
+				foundExpectedStatus = true
+				break
+			}
+		}
+		if !foundExpectedStatus {
+			err = errors.Errorf("Expected HTTP Status code in %v, got %d, reason %q",
+				expectedStatuses, response.StatusCode, response.Status)
+			if strings.Contains(response.Status, invalidTokenError) && !tokenRefreshed {
+				newToken, err = c.refreshTokenFunc()
+				tokenRefreshed = true
+				done = (err != nil)
+			}
 		}
 	}
-	if !foundExpectedStatus {
-		return errors.Errorf("Expected HTTP Status code in %v, got %d, reason %q",
-			expectedStatuses, response.StatusCode, response.Status)
+
+	if err != nil {
+		return err
 	}
 
 	body, err := ioutil.ReadAll(response.Body)

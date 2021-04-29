@@ -24,6 +24,7 @@ import (
 
 	"github.com/hashicorp/consul/api"
 	"github.com/laurentganne/yorc-ddi-plugin/ddi"
+	"github.com/laurentganne/yorcoidc"
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/config"
@@ -51,7 +52,15 @@ const (
 	// DatasetInfoLocations is an attribute providing the number of small files in a dataset (<= 32MB)
 	DatasetInfoNumberOfSmallFiles = "number_of_small_files"
 	// DatasetInfoLocations is an attribute providing the size in bytes of a dataset
-	DatasetInfoSize                          = "size"
+	DatasetInfoSize = "size"
+	// AccessTokenConsulAttribute is the access token attribute of a job stored in consul
+	AccessTokenConsulAttribute = "access_token"
+	// RefreshTokenConsulAttribute is the refresh token attribute of a job stored in consul
+	RefreshTokenConsulAttribute              = "refresh_token"
+	locationAAIURL                           = "aai_url"
+	locationAAIClientID                      = "aai_client_id"
+	locationAAIClientSecret                  = "aai_client_secret"
+	locationAAIRealm                         = "aai_realm"
 	associatedComputeInstanceRequirementName = "os"
 	hostingComputeInstanceRequirementName    = "host"
 	cloudStagingAreaAccessCapability         = "cloud_staging_area_access"
@@ -77,7 +86,6 @@ type DDIExecution struct {
 	DeploymentID   string
 	TaskID         string
 	NodeName       string
-	Token          string
 	Operation      prov.Operation
 	EnvInputs      []*operations.EnvInput
 	VarInputsNames []string
@@ -494,7 +502,11 @@ func (e *DDIExecution) getDDIClientFromRequirement(ctx context.Context, requirem
 		return nil, err
 	}
 
-	return ddi.GetClient(locationProps)
+	var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
+		accessToken, _, err := RefreshToken(ctx, locationProps, e.DeploymentID, e.NodeName)
+		return accessToken, err
+	}
+	return ddi.GetClient(locationProps, refreshTokenFunc)
 
 }
 
@@ -524,4 +536,60 @@ func (e *DDIExecution) GetDDILocationFromComputeLocation(ctx context.Context,
 		e.DeploymentID, e.NodeName, DDIInfrastructureType)
 	return locationProps, err
 
+}
+
+// GetAAIClient returns the AAI client for a given location
+func GetAAIClient(locationProps config.DynamicMap) yorcoidc.Client {
+	url := locationProps.GetString(locationAAIURL)
+	clientID := locationProps.GetString(locationAAIClientID)
+	clientSecret := locationProps.GetString(locationAAIClientSecret)
+	realm := locationProps.GetString(locationAAIRealm)
+	return yorcoidc.GetClient(url, clientID, clientSecret, realm)
+}
+
+// RefreshToken refreshes an access token
+func RefreshToken(ctx context.Context, locationProps config.DynamicMap, deploymentID, nodeName string) (string, string, error) {
+
+	var refreshToken string
+	val, err := deployments.GetInstanceAttributeValue(ctx, deploymentID, nodeName, "0", RefreshTokenConsulAttribute)
+	if err != nil {
+		return "", "", err
+	}
+	if val != nil {
+		refreshToken = val.RawString()
+	}
+
+	aaiClient := GetAAIClient(locationProps)
+	// Getting an AAI client to check token validity
+	accessToken, newRefreshToken, err := aaiClient.RefreshToken(ctx, refreshToken)
+	if err != nil {
+		return accessToken, newRefreshToken, errors.Wrapf(err, "Failed to refresh token for orchestrator")
+	}
+	// Store these values
+	err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
+		AccessTokenConsulAttribute, accessToken)
+	if err != nil {
+		return accessToken, newRefreshToken, errors.Wrapf(err, "Job %s, failed to store access token", nodeName)
+	}
+	err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
+		RefreshTokenConsulAttribute, newRefreshToken)
+	if err != nil {
+		return accessToken, newRefreshToken, errors.Wrapf(err, "Node %s, failed to store refresh token", nodeName)
+	}
+
+	return accessToken, newRefreshToken, err
+
+}
+
+// GetAccessToken gets the access token attibute of a TOSCA component
+func GetAccessToken(ctx context.Context, deploymentID, nodeName string) (string, error) {
+	var accessToken string
+	val, err := deployments.GetInstanceAttributeValue(ctx, deploymentID, nodeName, "0", AccessTokenConsulAttribute)
+	if err != nil {
+		return accessToken, err
+	}
+	if val != nil {
+		accessToken = val.RawString()
+	}
+	return accessToken, err
 }

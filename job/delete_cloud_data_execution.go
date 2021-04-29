@@ -19,6 +19,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/laurentganne/yorc-ddi-plugin/common"
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/deployments"
@@ -100,7 +101,12 @@ func (e *DeleteCloudDataExecution) SubmitCloudStagingAreaDataDeletion(ctx contex
 	}
 	log.Printf("Submitting deletion of %s", dataPath)
 
-	requestID, err := ddiClient.SubmitCloudStagingAreaDataDeletion(e.Token, dataPath)
+	token, err := common.GetAccessToken(ctx, e.DeploymentID, e.NodeName)
+	if err != nil {
+		return err
+	}
+
+	requestID, err := ddiClient.SubmitCloudStagingAreaDataDeletion(token, dataPath)
 	if err != nil {
 		return err
 	}

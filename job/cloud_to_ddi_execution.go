@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/laurentganne/yorc-ddi-plugin/common"
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/deployments"
@@ -112,7 +113,12 @@ func (e *CloudToDDIJobExecution) submitDataTransferRequest(ctx context.Context) 
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitCloudToDDIDataTransfer(metadata, e.Token, sourcePath, destPath)
+	token, err := common.GetAccessToken(ctx, e.DeploymentID, e.NodeName)
+	if err != nil {
+		return err
+	}
+
+	requestID, err := ddiClient.SubmitCloudToDDIDataTransfer(metadata, token, sourcePath, destPath)
 	if err != nil {
 		return err
 	}

@@ -133,6 +133,12 @@ node_types:
         type: string
         description: >
           ID of the DDI request created
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
     requirements:
       - os:
           capability: tosca.capabilities.OperatingSystem
@@ -176,6 +182,12 @@ node_types:
         type: string
         description: >
           ID of the DDI request created
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
     requirements:
       - os:
           capability: tosca.capabilities.OperatingSystem
@@ -244,6 +256,12 @@ node_types:
       staging_area_directory_path:
         type: string
         description: Path of the dataset directory in Cloud staging area
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
     capabilities:
       data_transfer:
         type: org.lexis.common.ddi.capabilities.DataTransferCloud
@@ -310,6 +328,12 @@ node_types:
       destination_path:
         type: string
         description: Path to the dataset transferred in DDI
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
     capabilities:
       data_transfer:
         type: org.lexis.common.ddi.capabilities.DataTransferDDI
@@ -363,6 +387,12 @@ node_types:
         type: string
         description: >
           ID of the DDI request created
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
     capabilities:
       cloud_delete:
         type: org.lexis.common.ddi.capabilities.DeleteCloudData
@@ -428,6 +458,12 @@ node_types:
       destination_path:
         type: string
         description: Path to the data transferred in HPC infrastructure
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
     capabilities:
       data_transfer:
         type: org.lexis.common.ddi.capabilities.DataTransferHPC
@@ -506,6 +542,12 @@ node_types:
           type: string
         description: |
           List of result files stored in DDI
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
     capabilities:
       data_transfer:
         type: org.lexis.common.ddi.capabilities.DataTransferDDI
@@ -599,6 +641,12 @@ node_types:
         entry_schema:
           type: org.lexis.common.ddi.types.ToBeStoredFileInfo
         description: files to be stored, once they won't be modified for a given elapsed time
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
     capabilities:
       data_transfer:
         type: org.lexis.common.ddi.capabilities.DataTransferDDI
@@ -733,6 +781,12 @@ node_types:
           type: string
         description: |
           Path of dataset files matching the patterns
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
     capabilities:
       dataset_files:
         type: org.lexis.common.ddi.capabilities.DatasetFilesProvider
@@ -807,6 +861,12 @@ node_types:
       staging_area_directory_path:
         type: string
         description: Path of the dataset directory in Cloud staging area
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
     capabilities:
       data_transfer:
         type: org.lexis.common.ddi.capabilities.DataTransferCloud
@@ -877,6 +937,12 @@ node_types:
       destination_path:
         type: string
         description: Path to the data transferred in HPC infrastructure
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
     capabilities:
       data_transfer:
         type: org.lexis.common.ddi.capabilities.DataTransferHPC
@@ -965,6 +1031,12 @@ node_types:
     attributes:
       request_id:
         type: string
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
     interfaces:
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:

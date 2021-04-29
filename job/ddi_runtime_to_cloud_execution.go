@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/laurentganne/yorc-ddi-plugin/common"
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/deployments"
@@ -160,7 +161,12 @@ func (e *DDIRuntimeToCloudExecution) submitDataTransferRequest(ctx context.Conte
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToCloudDataTransfer(metadata, e.Token, sourcePath, destPath)
+	token, err := common.GetAccessToken(ctx, e.DeploymentID, e.NodeName)
+	if err != nil {
+		return err
+	}
+
+	requestID, err := ddiClient.SubmitDDIToCloudDataTransfer(metadata, token, sourcePath, destPath)
 	if err != nil {
 		return err
 	}

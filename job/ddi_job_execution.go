@@ -100,7 +100,6 @@ func (e *DDIJobExecution) ExecuteAsync(ctx context.Context) (*prov.Action, time.
 	data[actionDataTaskID] = e.TaskID
 	data[actionDataNodeName] = e.NodeName
 	data[actionDataRequestID] = requestID
-	data[actionDataToken] = e.Token
 
 	return &prov.Action{ActionType: e.ActionType, Data: data}, e.MonitoringTimeInterval, err
 }
@@ -192,7 +191,12 @@ func getDDIClient(ctx context.Context, cfg config.Configuration, deploymentID, n
 		return nil, err
 	}
 
-	return ddi.GetClient(locationProps)
+	var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
+		accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID, nodeName)
+		return accessToken, err
+	}
+
+	return ddi.GetClient(locationProps, refreshTokenFunc)
 }
 
 func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deploymentID, nodeName string) (ddi.Client, string, error) {
@@ -210,13 +214,19 @@ func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deployment
 		return ddiClient, locationName, err
 	}
 
+	locationProps, err := locationMgr.GetLocationProperties(locationName, common.DDIInfrastructureType)
+	if err != nil {
+		return ddiClient, locationName, err
+	}
+
+	var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
+		accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID, nodeName)
+		return accessToken, err
+	}
+
 	if found {
 		// Check if the corresponding DDI client is alive
-		locationProps, err := locationMgr.GetLocationProperties(locationName, common.DDIInfrastructureType)
-		if err != nil {
-			return ddiClient, locationName, err
-		}
-		ddiClient, err = ddi.GetClient(locationProps)
+		ddiClient, err = ddi.GetClient(locationProps, refreshTokenFunc)
 		if err != nil {
 			return ddiClient, locationName, err
 		}
@@ -240,7 +250,7 @@ func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deployment
 			if err != nil {
 				return ddiClient, locationName, err
 			}
-			ddiClient, err = ddi.GetClient(locationProps)
+			ddiClient, err = ddi.GetClient(locationProps, refreshTokenFunc)
 			if err != nil {
 				return ddiClient, locationName, err
 			}

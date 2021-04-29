@@ -109,7 +109,6 @@ func (e *StoreRunningHPCJobFilesToDDI) ExecuteAsync(ctx context.Context) (*prov.
 	data := make(map[string]string)
 	data[actionDataTaskID] = e.TaskID
 	data[actionDataNodeName] = e.NodeName
-	data[actionDataToken] = e.Token
 	data[actionDataFilesPatterns] = filesPatternsStr
 	data[actionDataElapsedTime] = elapsedTimeStr
 	data[actionDataTaskName] = taskName
@@ -169,7 +168,11 @@ func (e *StoreRunningHPCJobFilesToDDI) Execute(ctx context.Context) error {
 			}
 		}
 
-		internalID, err := ddiClient.CreateEmptyDatasetInProject(e.Token, project.RawString(), metadata)
+		token, err := common.GetAccessToken(ctx, e.DeploymentID, e.NodeName)
+		if err != nil {
+			return err
+		}
+		internalID, err := ddiClient.CreateEmptyDatasetInProject(token, project.RawString(), metadata)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to create result dataset for deployment %s node %s", e.DeploymentID, e.NodeName)
 		}

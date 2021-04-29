@@ -18,6 +18,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/laurentganne/yorc-ddi-plugin/common"
 	"github.com/laurentganne/yorc-ddi-plugin/ddi"
 	"github.com/pkg/errors"
 
@@ -91,7 +92,13 @@ func (e *DDIDatasetInfoExecution) submitDatasetInfoRequest(ctx context.Context) 
 	if len(ddiAreaNames) == 0 {
 		return errors.Errorf("Found no DDI area having dataset path %s", datasetPath)
 	}
-	requestID, err := ddiClient.SubmitDDIDatasetInfoRequest(e.Token, ddiAreaNames[0], datasetPath)
+
+	token, err := common.GetAccessToken(ctx, e.DeploymentID, e.NodeName)
+	if err != nil {
+		return err
+	}
+
+	requestID, err := ddiClient.SubmitDDIDatasetInfoRequest(token, ddiAreaNames[0], datasetPath)
 	if err != nil {
 		return err
 	}
@@ -120,9 +127,15 @@ func (e *DDIDatasetInfoExecution) getAreasForDDIDataset(ctx context.Context, ddi
 	if err != nil {
 		return ddiAreas, err
 	}
+	// Get the access token
+	token, err := common.GetAccessToken(ctx, e.DeploymentID, e.NodeName)
+	if err != nil {
+		return ddiAreas, err
+	}
+
 	// Then check which one has a dataset or a replica
 	for _, ddiAreaName := range ddiAreaNames {
-		status, err := ddiClient.GetReplicationStatus(e.Token, ddiAreaName, datasetPath)
+		status, err := ddiClient.GetReplicationStatus(token, ddiAreaName, datasetPath)
 		if err != nil {
 			return ddiAreas, err
 		}

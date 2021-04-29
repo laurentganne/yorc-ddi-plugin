@@ -56,6 +56,8 @@ const (
 	ReplicationStatusDatasetNotReplicated = "Dataset is not replicated"
 	ReplicationStatusNoSuchDataset        = "Dataset doesn't exist or you don't have permission to access it"
 
+	invalidTokenError = "Invalid Token"
+
 	enableCloudAccessREST           = "/cloud/add"
 	disableCloudAccessREST          = "/cloud/remove"
 	ddiStagingStageREST             = "/stage"
@@ -79,6 +81,9 @@ const (
 	locationCloudStagingAreaUserIDPropertyName           = "cloud_staging_area_user_id"
 	locationCloudStagingAreaGroupIDPropertyName          = "cloud_staging_area_group_id"
 )
+
+// RefreshTokenFunc is a type of function provided by the caller to refresh a token when needed
+type RefreshTokenFunc func() (newAccessToken string, err error)
 
 // Client is the client interface to Distrbuted Data Infrastructure (DDI) service
 type Client interface {
@@ -112,7 +117,7 @@ type Client interface {
 }
 
 // GetClient returns a DDI client for a given location
-func GetClient(locationProps config.DynamicMap) (Client, error) {
+func GetClient(locationProps config.DynamicMap, refreshTokenFunc RefreshTokenFunc) (Client, error) {
 
 	url := locationProps.GetString(locationStagingURLPropertyName)
 	if url == "" {
@@ -141,8 +146,8 @@ func GetClient(locationProps config.DynamicMap) (Client, error) {
 	return &ddiClient{
 		ddiArea:           ddiArea,
 		cloudStagingArea:  cloudStagingArea,
-		httpStagingClient: getHTTPClient(url),
-		httpDatasetClient: getHTTPClient(datasetURL),
+		httpStagingClient: getHTTPClient(url, refreshTokenFunc),
+		httpDatasetClient: getHTTPClient(datasetURL, refreshTokenFunc),
 		StagingURL:        url,
 		SshfsURL:          sshfsURL,
 		DatasetURL:        datasetURL,

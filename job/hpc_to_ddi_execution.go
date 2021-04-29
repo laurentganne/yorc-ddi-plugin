@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/laurentganne/yorc-ddi-plugin/common"
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/deployments"
@@ -158,7 +159,12 @@ func (e *HPCToDDIExecution) submitDataTransferRequest(ctx context.Context) error
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitHPCToDDIDataTransfer(metadata, e.Token, sourceSystem,
+	token, err := common.GetAccessToken(ctx, e.DeploymentID, e.NodeName)
+	if err != nil {
+		return err
+	}
+
+	requestID, err := ddiClient.SubmitHPCToDDIDataTransfer(metadata, token, sourceSystem,
 		sourcePath, ddiPath, heappeURL, heappeJobID, taskID)
 	if err != nil {
 		return err

@@ -32,8 +32,10 @@ const (
 	TaskStatusPendingMsg = "Task still in the queue, or task does not exist"
 	// TaskStatusInProgressMsg is the message returned when a task is in progress
 	TaskStatusInProgressMsg = "In progress"
-	// TaskStatusTransferCompletedMsg is the message returned when a ytansfer is completed
+	// TaskStatusTransferCompletedMsg is the message returned when a transfer is completed
 	TaskStatusTransferCompletedMsg = "Transfer completed"
+	// TaskStatusReplicationCompletedMsg is the message returned when a replication is completed
+	TaskStatusReplicationCompletedMsg = "Replication completed"
 	// TaskStatusDataDeletedMsg is the message returned when data is deleted
 	TaskStatusDataDeletedMsg = "Data deleted"
 	// TaskStatusCloudAccessEnabledMsg is the message returned when the access to cloud staging area is enabled
@@ -58,6 +60,7 @@ const (
 	disableCloudAccessREST          = "/cloud/remove"
 	ddiStagingStageREST             = "/stage"
 	ddiStagingDeleteREST            = "/delete"
+	ddiStagingReplicateREST         = "/replicate"
 	ddiStagingReplicationStatusREST = "/replication/status"
 	ddiStagingDatasetInfoREST       = "/data/size"
 	ddiDatasetSearchREST            = "/search/metadata"
@@ -91,6 +94,7 @@ type Client interface {
 	SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
 	SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath, heappeURL string, jobID, taskID int64) (string, error)
 	SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath, heappeURL string, jobID, taskID int64) (string, error)
+	SubmitDDIReplicationRequest(token, sourceSystem, sourcePath, targetSystem string) (string, error)
 	GetCloudStagingAreaProperties() LocationCloudStagingArea
 	GetDDIDatasetInfoRequestStatus(token, requestID string) (string, string, string, string, error)
 	GetDataTransferRequestStatus(token, requestID string) (string, string, error)
@@ -98,6 +102,7 @@ type Client interface {
 	GetCloudStagingAreaName() string
 	GetDatasetURL() string
 	GetDDIAreaName() string
+	GetReplicationsRequestStatus(token, requestID string) (string, string, string, error)
 	GetReplicationStatus(token, targetSystem, targetPath string) (string, error)
 	GetSshfsURL() string
 	GetStagingURL() string
@@ -389,6 +394,28 @@ func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceS
 	return response.RequestID, err
 }
 
+// SubmitDDIReplication submits a replication request
+func (d *ddiClient) SubmitDDIReplicationRequest(token, sourceSystem, sourcePath, targetSystem string) (string, error) {
+
+	request := DataTransferRequest{
+		SourceSystem: sourceSystem,
+		SourcePath:   sourcePath,
+		TargetSystem: targetSystem,
+	}
+
+	requestStr, _ := json.Marshal(request)
+	log.Debugf("Submitting DDI replication request %s", string(requestStr))
+
+	var response SubmittedRequestInfo
+	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingReplicateREST,
+		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit replication of %s %s to %s", sourceSystem, sourcePath, targetSystem)
+	}
+
+	return response.RequestID, err
+}
+
 // GetDDIDatasetInfoRequestStatus returns the status of a dataset info request
 func (d *ddiClient) GetDDIDatasetInfoRequestStatus(token, requestID string) (string, string, string, string, error) {
 
@@ -427,6 +454,20 @@ func (d *ddiClient) GetDeletionRequestStatus(token, requestID string) (string, e
 	}
 
 	return response.Status, err
+}
+
+// GetReplicationsRequestStatus returns the status of a replication request
+// and the path of the replicated dataset on the destination
+func (d *ddiClient) GetReplicationsRequestStatus(token, requestID string) (string, string, string, error) {
+
+	var response RequestStatus
+	err := d.httpStagingClient.doRequest(http.MethodGet, path.Join(ddiStagingReplicateREST, requestID),
+		[]int{http.StatusOK}, token, nil, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit get status for replication request %s", requestID)
+	}
+
+	return response.Status, response.TargetPath, response.PID, err
 }
 
 // GetReplicationStatus returns the replication startus of a dataset on a given location

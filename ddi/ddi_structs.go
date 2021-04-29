@@ -43,7 +43,7 @@ type DataTransferRequest struct {
 	SourceSystem string   `json:"source_system"`
 	SourcePath   string   `json:"source_path"`
 	TargetSystem string   `json:"target_system"`
-	TargetPath   string   `json:"target_path"`
+	TargetPath   string   `json:"target_path,omitempty"`
 }
 
 // DataTransferRequestHPCExtension holds additional parameters for data transfers on HPC
@@ -74,6 +74,7 @@ type SubmittedRequestInfo struct {
 type RequestStatus struct {
 	Status     string `json:"status"`
 	TargetPath string `json:"target_path,omitempty"`
+	PID        string `json:"PID,omitempty"`
 }
 
 // DatasetLocation holds location properties of a dataset

@@ -47,6 +47,7 @@ const (
 	cloudToDDIJobType                       = "org.lexis.common.ddi.nodes.CloudToDDIJob"
 	waitForDDIDatasetJobType                = "org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob"
 	storeRunningHPCJobType                  = "org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob"
+	storeRunningHPCJobGroupByDatasetType    = "org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIGroupByDatasetJob"
 	deleteCloudDataJobType                  = "org.lexis.common.ddi.nodes.DeleteCloudDataJob"
 	getDDIDatasetInfoJobType                = "org.lexis.common.ddi.nodes.GetDDIDatasetInfoJob"
 )
@@ -363,25 +364,44 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		return exec, exec.ResolveExecution(ctx)
 	}
 
+	isStoreRunningHPCJobGroupByDatasetType, err := deployments.IsNodeDerivedFrom(
+		ctx, deploymentID, nodeName, storeRunningHPCJobGroupByDatasetType)
+	if err != nil {
+		return exec, err
+	}
+	if isStoreRunningHPCJobGroupByDatasetType {
+		exec = &job.StoreRunningHPCJobFilesGroupByDataset{
+			DDIExecution: &common.DDIExecution{
+				KV:           kv,
+				Cfg:          cfg,
+				DeploymentID: deploymentID,
+				TaskID:       taskID,
+				NodeName:     nodeName,
+				Token:        token,
+				Operation:    operation,
+			},
+			MonitoringTimeInterval: monitoringTimeInterval,
+		}
+
+		return exec, exec.ResolveExecution(ctx)
+	}
+
 	isStoreRunningHPCJobType, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, storeRunningHPCJobType)
 	if err != nil {
 		return exec, err
 	}
 	if isStoreRunningHPCJobType {
 		exec = &job.StoreRunningHPCJobFilesToDDI{
-			DDIJobExecution: &job.DDIJobExecution{
-				DDIExecution: &common.DDIExecution{
-					KV:           kv,
-					Cfg:          cfg,
-					DeploymentID: deploymentID,
-					TaskID:       taskID,
-					NodeName:     nodeName,
-					Token:        token,
-					Operation:    operation,
-				},
-				ActionType:             job.StoreRunningHPCJobFilesToDDIAction,
-				MonitoringTimeInterval: monitoringTimeInterval,
+			DDIExecution: &common.DDIExecution{
+				KV:           kv,
+				Cfg:          cfg,
+				DeploymentID: deploymentID,
+				TaskID:       taskID,
+				NodeName:     nodeName,
+				Token:        token,
+				Operation:    operation,
 			},
+			MonitoringTimeInterval: monitoringTimeInterval,
 		}
 
 		return exec, exec.ResolveExecution(ctx)

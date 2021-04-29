@@ -17,7 +17,6 @@ package job
 import (
 	"context"
 	"encoding/json"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -28,19 +27,19 @@ import (
 
 	"github.com/ystia/yorc/v4/deployments"
 	"github.com/ystia/yorc/v4/events"
-	"github.com/ystia/yorc/v4/log"
 	"github.com/ystia/yorc/v4/prov"
 	"github.com/ystia/yorc/v4/tosca"
 )
 
-// StoreRunningHPCJobFilesToDDI holds DDI to HPC data transfer job Execution properties
-type StoreRunningHPCJobFilesToDDI struct {
+// StoreRunningHPCJobFilesGroupByDataset holds DDI to HPC data transfer job Execution properties,
+// and allows to group files to store in datasets according to a pattern
+type StoreRunningHPCJobFilesGroupByDataset struct {
 	*common.DDIExecution
 	MonitoringTimeInterval time.Duration
 }
 
 // ExecuteAsync executes an asynchronous operation
-func (e *StoreRunningHPCJobFilesToDDI) ExecuteAsync(ctx context.Context) (*prov.Action, time.Duration, error) {
+func (e *StoreRunningHPCJobFilesGroupByDataset) ExecuteAsync(ctx context.Context) (*prov.Action, time.Duration, error) {
 	if strings.ToLower(e.Operation.Name) != tosca.RunnableRunOperationName {
 		return nil, 0, errors.Errorf("Unsupported asynchronous operation %q", e.Operation.Name)
 	}
@@ -87,6 +86,46 @@ func (e *StoreRunningHPCJobFilesToDDI) ExecuteAsync(ctx context.Context) (*prov.
 		}
 	}
 
+	// Pattern used to group files by dataset
+	val, err = deployments.GetNodePropertyValue(ctx, e.DeploymentID, e.NodeName, groupFilesPatternProperty)
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "Failed to get %s property for deployment %s node %s", groupFilesPatternProperty, e.DeploymentID, e.NodeName)
+	}
+	var groupFilesPattern string
+	if val != nil && val.RawString() != "" {
+		groupFilesPattern = val.RawString()
+	}
+
+	// List of sites where to replicate datasets
+	val, err = deployments.GetNodePropertyValue(ctx, e.DeploymentID, e.NodeName, replicationSitesProperty)
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "Failed to get %s property for deployment %s node %s", replicationSitesProperty, e.DeploymentID, e.NodeName)
+	}
+	var replicationSites []string
+	var replicationSitesStr string
+	if val != nil && val.RawString() != "" {
+		replicationSitesStr = val.RawString()
+		err = json.Unmarshal([]byte(replicationSitesStr), &replicationSites)
+		if err != nil {
+			return nil, 0, errors.Wrapf(err, "Failed to parse %s property for deployment %s node %s, value %s",
+				replicationSitesProperty, e.DeploymentID, e.NodeName, replicationSitesStr)
+		}
+	}
+
+	// DDI path where to store results
+	project, err := deployments.GetNodePropertyValue(ctx, e.DeploymentID, e.NodeName, projectProperty)
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "Failed to get %s property for deployment %s node %s", projectProperty, e.DeploymentID, e.NodeName)
+	}
+	if project == nil || project.RawString() == "" {
+		return nil, 0, errors.Errorf("Mandatory property %s is not set for deployment %s node %s", projectProperty, e.DeploymentID, e.NodeName)
+	}
+
+	val, err = deployments.GetNodePropertyValue(ctx, e.DeploymentID, e.NodeName, metadataProperty)
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "Failed to get metadata property for deployment %s node %s", e.DeploymentID, e.NodeName)
+	}
+
 	// Dataset metadata
 	var metadata ddi.Metadata
 	var metadataStr string
@@ -113,14 +152,17 @@ func (e *StoreRunningHPCJobFilesToDDI) ExecuteAsync(ctx context.Context) (*prov.
 	data[actionDataFilesPatterns] = filesPatternsStr
 	data[actionDataElapsedTime] = elapsedTimeStr
 	data[actionDataTaskName] = taskName
-	data[actionDataMetadata] = metadataStr
 	data[actionDataOperation] = string(operationStr)
+	data[actionDataGroupFilesPattern] = groupFilesPattern
+	data[actionDataReplicationSites] = replicationSitesStr
+	data[actionDataDDIProjectName] = project.RawString()
+	data[actionDataMetadata] = metadataStr
 
-	return &prov.Action{ActionType: StoreRunningHPCJobFilesToDDIAction, Data: data}, e.MonitoringTimeInterval, nil
+	return &prov.Action{ActionType: StoreRunningHPCJobFilesGroupByDatasetAction, Data: data}, e.MonitoringTimeInterval, nil
 }
 
 // Execute executes a synchronous operation
-func (e *StoreRunningHPCJobFilesToDDI) Execute(ctx context.Context) error {
+func (e *StoreRunningHPCJobFilesGroupByDataset) Execute(ctx context.Context) error {
 
 	var err error
 	switch strings.ToLower(e.Operation.Name) {
@@ -137,52 +179,7 @@ func (e *StoreRunningHPCJobFilesToDDI) Execute(ctx context.Context) error {
 		// Nothing to do here
 	case tosca.RunnableSubmitOperationName:
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
-			"Creating Dataset where to store results for %q", e.NodeName)
-
-		ddiClient, err := getDDIClient(ctx, e.Cfg, e.DeploymentID, e.NodeName)
-		if err != nil {
-			return err
-		}
-
-		// DDI path where to store results
-		project, err := deployments.GetNodePropertyValue(ctx, e.DeploymentID, e.NodeName, projectProperty)
-		if err != nil {
-			return errors.Wrapf(err, "Failed to get %s property for deployment %s node %s", projectProperty, e.DeploymentID, e.NodeName)
-		}
-		if project == nil || project.RawString() == "" {
-			return errors.Errorf("Mandatory property %s is not set for deployment %s node %s", projectProperty, e.DeploymentID, e.NodeName)
-		}
-		ddiPath := getDDIProjectPath(project.RawString())
-
-		val, err := deployments.GetNodePropertyValue(ctx, e.DeploymentID, e.NodeName, metadataProperty)
-		if err != nil {
-			return errors.Wrapf(err, "Failed to get metadata property for deployment %s node %s", e.DeploymentID, e.NodeName)
-		}
-		var metadata ddi.Metadata
-		var metadataStr string
-		if val != nil && val.RawString() != "" {
-			metadataStr = val.RawString()
-			err = json.Unmarshal([]byte(metadataStr), &metadata)
-			if err != nil {
-				return errors.Wrapf(err, "Failed to parse metadata property for deployment %s node %s, value %s",
-					e.DeploymentID, e.NodeName, metadataStr)
-			}
-		}
-
-		internalID, err := ddiClient.CreateEmptyDatasetInProject(e.Token, project.RawString(), metadata)
-		if err != nil {
-			return errors.Wrapf(err, "Failed to create result dataset for deployment %s node %s", e.DeploymentID, e.NodeName)
-		}
-
-		datasetPath := path.Join(ddiPath, internalID)
-
-		err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
-			destinationDatasetPathConsulAttribute, datasetPath)
-		if err != nil {
-			return errors.Wrapf(err, "Failed to store %s %s %s value %s", e.DeploymentID, e.NodeName, destinationDatasetPathConsulAttribute, "")
-		}
-
-		log.Debugf("created dataset ID %s path %s\n", internalID, datasetPath)
+			"Submitting job %s", e.NodeName)
 
 		// Initializing the stored files attribute that will be updated by the monitoring task
 		storedFiles := make(map[string]StoredFileInfo)
@@ -196,13 +193,18 @@ func (e *StoreRunningHPCJobFilesToDDI) Execute(ctx context.Context) error {
 		}
 		// Initializing the to be stored files attribute that will be updated by the monitoring task
 		toBeStoredFiles := make(map[string]ToBeStoredFileInfo)
-		if err != nil {
-			return err
-		}
 		err = deployments.SetAttributeComplexForAllInstances(ctx, e.DeploymentID, e.NodeName,
 			toBeStoredFilesConsulAttribute, toBeStoredFiles)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to store %s %s %s value %+v", e.DeploymentID, e.NodeName, toBeStoredFilesConsulAttribute, toBeStoredFiles)
+		}
+
+		// Initializing the map of datasets that will be created by group of files
+		datasetReplication := make(map[string]DatasetReplicationInfo)
+		err = deployments.SetAttributeComplexForAllInstances(ctx, e.DeploymentID, e.NodeName,
+			datasetReplicationConsulAttribute, datasetReplication)
+		if err != nil {
+			return errors.Wrapf(err, "Failed to store %s %s %s value %+v", e.DeploymentID, e.NodeName, datasetReplicationConsulAttribute, datasetReplication)
 		}
 
 	case tosca.RunnableCancelOperationName:

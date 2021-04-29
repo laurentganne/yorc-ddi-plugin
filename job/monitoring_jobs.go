@@ -54,6 +54,9 @@ const (
 	// StoreRunningHPCJobFilesToDDIAction is the action of storing files created/updated
 	// by a running HEAppE job
 	StoreRunningHPCJobFilesToDDIAction = "store-running-hpc-job-files"
+	// StoreRunningHPCJobFilesToDDIAction is the action of storing files created/updated
+	// by a running HEAppE job and grouping them in datasets according to a pattern
+	StoreRunningHPCJobFilesGroupByDatasetAction = "store-running-hpc-job-files-group-by-dataset"
 
 	requestStatusPending        = "PENDING"
 	requestStatusRunning        = "RUNNING"
@@ -63,11 +66,15 @@ const (
 	actionDataRequestID         = "requestID"
 	actionDataToken             = "token"
 	actionDataTaskID            = "taskID"
+	actionDataDDIProjectName    = "ddiProjectName"
 	actionDataMetadata          = "metadata"
 	actionDataFilesPatterns     = "files_patterns"
 	actionDataElapsedTime       = "elapsed_time"
 	actionDataTaskName          = "task_name"
 	actionDataOperation         = "operation"
+	actionDataGroupFilesPattern = "group_files_pattern"
+	actionDataReplicationSites  = "replication_sites"
+
 	datasetElementDirectoryType = "directory"
 	datasetElementFileType      = "file"
 
@@ -82,24 +89,68 @@ type ActionOperator struct {
 type ChangedFile struct {
 	FileName         string
 	LastModifiedDate string
+	GroupIdentifier  string `json:"groupIdentifier,omitempty"`
 }
 
 // StoredFileInfo holds properties of a file stored in DDI
 type StoredFileInfo struct {
 	LastModifiedDate string
 	RequestID        string
+	Status           string
+	ErrorMessage     string
+	GroupIdentifier  string
+	NumberOfAttempts int
 }
 
 // ToBeStoredFileInfo holds properties of a file to be stored in DDI
 type ToBeStoredFileInfo struct {
+	GroupIdentifier        string
 	LastModifiedDate       string
 	CandidateToStorageDate string
+}
+
+// ReplicationInfo holds the request ID and status of a replication
+type ReplicationInfo struct {
+	RequestID        string
+	Status           string
+	ErrorMessage     string
+	NumberOfAttempts int
+}
+
+// DatasetReplicationInfo holds replication info of a dataset over several locations
+type DatasetReplicationInfo struct {
+	DatasetPath string
+	Replication map[string]ReplicationInfo // replication info per location
 }
 
 type actionData struct {
 	token    string
 	taskID   string
 	nodeName string
+}
+
+type hpcJobMonitoringInfo struct {
+	deploymentID     string
+	nodeName         string
+	metadata         ddi.Metadata
+	projectName      string
+	defaultPath      string
+	groupID          string
+	replicationSites []string
+}
+
+type hpcTransferContextInfo struct {
+	token            string
+	deploymentID     string
+	nodeName         string
+	jobID            int64
+	taskID           int64
+	jobDirPath       string
+	heappeURL        string
+	defaultPath      string
+	metadata         ddi.Metadata
+	sourceSystem     string
+	replicationSites []string
 }
 
 // ExecAction allows to execute and action
@@ -115,6 +166,8 @@ func (o *ActionOperator) ExecAction(ctx context.Context, cfg config.Configuratio
 	} else if action.ActionType == WaitForDatasetAction {
 		deregister, err = o.monitorDataset(ctx, cfg, deploymentID, action)
 	} else if action.ActionType == StoreRunningHPCJobFilesToDDIAction {
+		deregister, err = o.monitorRunningHPCJob(ctx, cfg, deploymentID, action)
+	} else if action.ActionType == StoreRunningHPCJobFilesGroupByDatasetAction {
 		deregister, err = o.monitorRunningHPCJob(ctx, cfg, deploymentID, action)
 	} else {
 		deregister = true
@@ -163,34 +216,9 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 		return true, err
 	}
 
-	var requestStatus string
-	var errorMessage string
-	switch {
-	case status == ddi.TaskStatusPendingMsg:
-		requestStatus = requestStatusPending
-	case status == ddi.TaskStatusInProgressMsg:
-		requestStatus = requestStatusRunning
-	case status == ddi.TaskStatusTransferCompletedMsg:
-		requestStatus = requestStatusCompleted
-	case status == ddi.TaskStatusDataDeletedMsg:
-		requestStatus = requestStatusCompleted
-	case status == ddi.TaskStatusCloudAccessEnabledMsg:
-		requestStatus = requestStatusCompleted
-	case status == ddi.TaskStatusDisabledMsg:
-		requestStatus = requestStatusCompleted
-	case status == ddi.TaskStatusDoneMsg:
-		requestStatus = requestStatusCompleted
-	case strings.HasPrefix(status, ddi.TaskStatusFailureMsgPrefix):
-		if strings.HasSuffix(status, ddi.TaskStatusMsgSuffixAlreadyEnabled) {
-			requestStatus = requestStatusCompleted
-		} else if strings.HasSuffix(status, ddi.TaskStatusMsgSuffixAlreadyDisabled) {
-			requestStatus = requestStatusCompleted
-		} else {
-			requestStatus = requestStatusFailed
-			errorMessage = status[(len(ddi.TaskStatusFailureMsgPrefix) - 1):]
-		}
-	default:
-		return true, errors.Errorf("Unexpected status :%q", status)
+	requestStatus, errorMessage, err := o.getRequestStatusFromDDIStatus(status)
+	if err != nil {
+		return true, err
 	}
 
 	previousRequestStatus, err := deployments.GetInstanceStateString(ctx, deploymentID, actionData.nodeName, "0")
@@ -273,6 +301,42 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 	return deregister, err
 }
 
+func (o *ActionOperator) getRequestStatusFromDDIStatus(ddiStatus string) (string, string, error) {
+	var requestStatus string
+	var errorMessage string
+	var err error
+	switch {
+	case ddiStatus == ddi.TaskStatusPendingMsg:
+		requestStatus = requestStatusPending
+	case ddiStatus == ddi.TaskStatusInProgressMsg:
+		requestStatus = requestStatusRunning
+	case ddiStatus == ddi.TaskStatusTransferCompletedMsg:
+		requestStatus = requestStatusCompleted
+	case ddiStatus == ddi.TaskStatusDataDeletedMsg:
+		requestStatus = requestStatusCompleted
+	case ddiStatus == ddi.TaskStatusCloudAccessEnabledMsg:
+		requestStatus = requestStatusCompleted
+	case ddiStatus == ddi.TaskStatusDisabledMsg:
+		requestStatus = requestStatusCompleted
+	case ddiStatus == ddi.TaskStatusDoneMsg:
+		requestStatus = requestStatusCompleted
+	case strings.HasPrefix(ddiStatus, ddi.TaskStatusFailureMsgPrefix):
+		if strings.HasSuffix(ddiStatus, ddi.TaskStatusMsgSuffixAlreadyEnabled) {
+			requestStatus = requestStatusCompleted
+		} else if strings.HasSuffix(ddiStatus, ddi.TaskStatusMsgSuffixAlreadyDisabled) {
+			requestStatus = requestStatusCompleted
+		} else {
+			requestStatus = requestStatusFailed
+			errorMessage = ddiStatus[(len(ddi.TaskStatusFailureMsgPrefix) - 1):]
+		}
+	default:
+		err = errors.Errorf("Unexpected status :%q", ddiStatus)
+	}
+
+	return requestStatus, errorMessage, err
+
+}
+
 func (o *ActionOperator) monitorDataset(ctx context.Context, cfg config.Configuration, deploymentID string, action *prov.Action) (bool, error) {
 	var (
 		deregister bool
@@ -291,7 +355,7 @@ func (o *ActionOperator) monitorDataset(ctx context.Context, cfg config.Configur
 	var metadata ddi.Metadata
 	err = json.Unmarshal([]byte(metadataStr), &metadata)
 	if err != nil {
-		return true, errors.Wrapf(err, "Wrong format for metadata %s for actioType %s", metadataStr, action.ActionType)
+		return true, errors.Wrapf(err, "Wrong format for metadata %s for actionType %s", metadataStr, action.ActionType)
 	}
 
 	var filesPatterns []string
@@ -299,12 +363,12 @@ func (o *ActionOperator) monitorDataset(ctx context.Context, cfg config.Configur
 	if filesPatternsStr != "" {
 		err = json.Unmarshal([]byte(filesPatternsStr), &filesPatterns)
 		if err != nil {
-			return true, errors.Wrapf(err, "Wrong format for files patterns %s for actioType %s", filesPatternsStr, action.ActionType)
+			return true, errors.Wrapf(err, "Wrong format for files patterns %s for actionType %s", filesPatternsStr, action.ActionType)
 		}
 
 	}
 
-	// TODO: checl all DDI clients
+	// TODO: check all DDI clients
 	ddiClient, err := getDDIClient(ctx, cfg, deploymentID, actionData.nodeName)
 	if err != nil {
 		return true, err
@@ -436,7 +500,8 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		ok         bool
 	)
 
-	if action.ActionType != StoreRunningHPCJobFilesToDDIAction {
+	if action.ActionType != StoreRunningHPCJobFilesToDDIAction &&
+		action.ActionType != StoreRunningHPCJobFilesGroupByDatasetAction {
 		return true, errors.Errorf("Unsupported action %s", action.ActionType)
 	}
 
@@ -464,7 +529,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	if filesPatternsStr != "" {
 		err = json.Unmarshal([]byte(filesPatternsStr), &filesPatternsProperty)
 		if err != nil {
-			return true, errors.Wrapf(err, "Wrong format for files patterns %s for actioType %s", filesPatternsStr, action.ActionType)
+			return true, errors.Wrapf(err, "Wrong format for files patterns %s for actionType %s", filesPatternsStr, action.ActionType)
 		}
 
 	}
@@ -478,6 +543,41 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	err = json.Unmarshal([]byte(operationStr), &opStore)
 	if err != nil {
 		return true, errors.Wrapf(err, "Failed to unmarshall operation %s", operationStr)
+	}
+
+	groupFilesPattern := action.Data[actionDataGroupFilesPattern]
+	var replicationSites []string
+	if action.Data[actionDataReplicationSites] != "" {
+		err = json.Unmarshal([]byte(action.Data[actionDataReplicationSites]), &replicationSites)
+		if err != nil {
+			return true, errors.Wrapf(err, "Failed to parse action data %s property for operation %v : %s",
+				actionDataReplicationSites, opStore, action.Data[actionDataReplicationSites])
+		}
+	}
+
+	// Get the list of already created dataset for each group and their replication status
+	var datasetReplication map[string]DatasetReplicationInfo
+	if groupFilesPattern != "" {
+		val, err := deployments.GetInstanceAttributeValue(ctx, deploymentID, actionData.nodeName, "0", datasetReplicationConsulAttribute)
+		if err == nil && val != nil && val.RawString() != "" {
+			err = json.Unmarshal([]byte(val.RawString()), &datasetReplication)
+			if err != nil {
+				err = errors.Wrapf(err, "Failed to parse map of dataset paths %s", val.RawString())
+				return true, err
+			}
+		}
+	}
+
+	ddiProjectName := action.Data[actionDataDDIProjectName]
+
+	metadataStr, ok := action.Data[actionDataMetadata]
+	if !ok {
+		return true, errors.Errorf("Missing mandatory information metadata for actionType %s", action.ActionType)
+	}
+	var metadata ddi.Metadata
+	err = json.Unmarshal([]byte(metadataStr), &metadata)
+	if err != nil {
+		return true, errors.Wrapf(err, "Wrong format for metadata %s for actionType %s", metadataStr, action.ActionType)
 	}
 
 	// Refresh input values
@@ -599,7 +699,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	var changedFiles []ChangedFile
 	err = json.Unmarshal([]byte(changedFilesStr), &changedFiles)
 	if err != nil {
-		return true, errors.Wrapf(err, "Wrong format for changed files %s for actioType %s", changedFilesStr, action.ActionType)
+		return true, errors.Wrapf(err, "Wrong format for changed files %s for actionType %s", changedFilesStr, action.ActionType)
 	}
 
 	// Keeping only the files since job start not already stored, removing any input file added before
@@ -630,6 +730,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 				return true, errors.Wrapf(err, "Failed to check if file %s matches filters %v", changedFile.FileName, filesPatterns)
 			}
 			if matches {
+				changedFile.GroupIdentifier = o.getGroupIdentifier(changedFile.FileName, groupFilesPattern)
 				newFilesUpdates = append(newFilesUpdates, changedFile)
 			} else {
 				log.Debugf("ignoring file %s not matching patterns %+v\n", changedFile.FileName, filesPatterns)
@@ -667,6 +768,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 			}
 		} else {
 			toBeStoredUpdated[changedFile.FileName] = ToBeStoredFileInfo{
+				GroupIdentifier:        changedFile.GroupIdentifier,
 				LastModifiedDate:       changedFile.LastModifiedDate,
 				CandidateToStorageDate: currentDate,
 			}
@@ -711,36 +813,381 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		return true, errors.Errorf("Failed to get HEAppE URL of job %d", heappeJobID)
 	}
 
-	for name, details := range toStore {
+	for name, fileDetails := range toStore {
+		hpcJobMonitoringInfo := hpcJobMonitoringInfo{
+			deploymentID:     deploymentID,
+			nodeName:         actionData.nodeName,
+			metadata:         metadata,
+			projectName:      ddiProjectName,
+			defaultPath:      datasetPath,
+			groupID:          fileDetails.GroupIdentifier,
+			replicationSites: replicationSites,
+		}
+
+		destPath, err := o.setDestinationDatasetPath(ctx, ddiClient, hpcJobMonitoringInfo, datasetReplication, actionData.token)
+		if err != nil {
+			return true, err
+		}
 		sourcePath := path.Join(jobDirPath, name)
-		var metadata ddi.Metadata
 		requestID, err := ddiClient.SubmitHPCToDDIDataTransfer(metadata, actionData.token, sourceSystem,
-			sourcePath, datasetPath, heappeURL, heappeJobID, taskID)
+			sourcePath, destPath, heappeURL, heappeJobID, taskID)
 		if err != nil {
 			return true, errors.Wrapf(err, "Failed to submit data transfer of %s to DDI", sourcePath)
 		}
 
-		log.Debugf("Submitted request to store %s request_id %s\n", sourcePath, requestID)
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, deploymentID).RegisterAsString(
+			fmt.Sprintf("Submitted request to store %s, request_id %s", sourcePath, requestID))
 
 		storedFiles[name] = StoredFileInfo{
-			LastModifiedDate: details.LastModifiedDate,
+			LastModifiedDate: fileDetails.LastModifiedDate,
 			RequestID:        requestID,
+			Status:           requestStatusPending,
+			GroupIdentifier:  fileDetails.GroupIdentifier,
 		}
+	}
+
+	// Get an update of data transfer requests status
+	hpcTransferInfo := hpcTransferContextInfo{
+		token:            actionData.token,
+		deploymentID:     deploymentID,
+		nodeName:         actionData.nodeName,
+		jobID:            heappeJobID,
+		taskID:           taskID,
+		defaultPath:      datasetPath,
+		jobDirPath:       jobDirPath,
+		heappeURL:        heappeURL,
+		metadata:         metadata,
+		sourceSystem:     sourceSystem,
+		replicationSites: replicationSites,
+	}
+	remainingRequests, completedGroupsIDs, err := o.updateRequestsStatus(ctx, ddiClient,
+		storedFiles, toBeStoredUpdated, datasetReplication, hpcTransferInfo)
+	if err != nil {
+		return true, err
 	}
 
 	log.Debugf("Files stored updated: %+v\n", storedFiles)
 
-	// Save the new stored values
-	err = deployments.SetAttributeComplexForAllInstances(ctx, deploymentID, actionData.nodeName,
-		storedFilesConsulAttribute, storedFiles)
+	// Replicate completed datasets
+	replicating, replicationDone, err := o.updateReplicationStatus(
+		ctx, ddiClient, completedGroupsIDs, datasetReplication, hpcTransferInfo)
 	if err != nil {
-		return deregister, errors.Wrapf(err, "Failed to store %s %s %s value %+v",
-			deploymentID, actionData.nodeName, storedFilesConsulAttribute, storedFiles)
+		return true, err
 	}
 
-	// TODO check requests IDs and set deregister to true only when all request IDs are done
-	deregister = jobDone
+	if len(replicationDone) > 0 {
+		err = deployments.SetAttributeForAllInstances(ctx, deploymentID, actionData.nodeName,
+			destinationDatasetPathConsulAttribute, datasetReplication[replicationDone[len(replicationDone)-1]].DatasetPath)
+		if err != nil {
+			return true, errors.Wrapf(err, "Failed to store %s %s %s value %s", deploymentID, actionData.nodeName, destinationDatasetPathConsulAttribute, "")
+		}
+	}
+
+	if jobDone && (len(remainingRequests) > 0 || len(replicating) > 0) {
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, deploymentID).RegisterAsString(
+			fmt.Sprintf("Job %s done, but still %d transfer requests and %d replications to end",
+				actionData.nodeName, len(remainingRequests), len(replicating)))
+	}
+
+	deregister = jobDone && len(remainingRequests) == 0 && len(replicating) == 0
 	return deregister, err
+}
+
+func (o *ActionOperator) updateReplicationStatus(ctx context.Context, ddiClient ddi.Client,
+	completedGroupsIDs []string, datasetReplication map[string]DatasetReplicationInfo,
+	hpcTransferInfo hpcTransferContextInfo) ([]string, []string, error) {
+
+	var replicatingIDs []string
+	var replicationDone []string
+
+	if len(hpcTransferInfo.replicationSites) == 0 {
+		// Nothing to replicate
+		return replicatingIDs, replicationDone, nil
+	}
+
+	// Update status of replications in progress and find which replication to (re)submit
+	var replicationsToSubmit []string
+	for groupID, datasetReplicationInfo := range datasetReplication {
+		replications := datasetReplicationInfo.Replication
+
+		for location, replicationInfo := range replications {
+			if replicationInfo.RequestID == "" {
+				replicationsToSubmit = append(replicationsToSubmit, groupID)
+				continue
+			}
+			var requestStatus, errorMessage string
+			ddiStatus, _, err := ddiClient.GetDataTransferRequestStatus(hpcTransferInfo.token, replicationInfo.RequestID)
+			if err != nil {
+				log.Printf("Failed to get status of DDI replication request %s : %s", replicationInfo.RequestID, err.Error())
+				requestStatus = requestStatusFailed
+				errorMessage = err.Error()
+			} else {
+				requestStatus, errorMessage, err = o.getRequestStatusFromDDIStatus(ddiStatus)
+				if err != nil {
+					log.Printf("Failed to match status of DDI replication request %s : %s", replicationInfo.RequestID, err.Error())
+					requestStatus = requestStatusFailed
+					errorMessage = err.Error()
+
+				}
+			}
+			replicationInfo.ErrorMessage = errorMessage
+			replicationInfo.Status = requestStatus
+			if errorMessage != "" {
+				replicationInfo.NumberOfAttempts = replicationInfo.NumberOfAttempts + 1
+				replicationsToSubmit = append(replicationsToSubmit, groupID)
+			} else if requestStatus != requestStatusCompleted {
+				replicatingIDs = append(replicatingIDs, groupID)
+			} else {
+				replicationDone = append(replicationDone, groupID)
+			}
+			replications[location] = replicationInfo
+		}
+		datasetReplicationInfo.Replication = replications
+		datasetReplication[groupID] = datasetReplicationInfo
+	}
+
+	// Submit new requests
+	var err error
+	for _, groupID := range replicationsToSubmit {
+		replicatingIDs = append(replicatingIDs, groupID)
+		replications := datasetReplication[groupID].Replication
+		for location, replicationInfo := range replications {
+			if replicationInfo.NumberOfAttempts > 5 {
+				events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelERROR, hpcTransferInfo.deploymentID).RegisterAsString(
+					fmt.Sprintf("Submitted request to replicate %s to %s, request_id %s failed at attempt %d with error %s",
+						datasetReplication[groupID].DatasetPath, location, replicationInfo.RequestID, replicationInfo.NumberOfAttempts, replicationInfo.ErrorMessage))
+				err = errors.Errorf("Failed to replicate %s to %s, DDI request %s error %s", datasetReplication[groupID].DatasetPath, location,
+					replicationInfo.RequestID, replicationInfo.ErrorMessage)
+				break
+			}
+
+			replicationInfo.RequestID, err = ddiClient.SubmitDDIReplicationRequest(hpcTransferInfo.token, ddiClient.GetDDIAreaName(),
+				datasetReplication[groupID].DatasetPath, location)
+			if err != nil {
+				events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelWARN, hpcTransferInfo.deploymentID).RegisterAsString(
+					fmt.Sprintf("Failed to submit replication of %s to %s, error %s",
+						datasetReplication[groupID].DatasetPath, location, err.Error()))
+				replicationInfo.RequestID = ""
+				replicationInfo.ErrorMessage = err.Error()
+				replicationInfo.Status = requestStatusFailed
+				replicationInfo.NumberOfAttempts = replicationInfo.NumberOfAttempts + 1
+			} else {
+				replicationInfo.ErrorMessage = ""
+				replicationInfo.Status = requestStatusPending
+				replicationInfo.NumberOfAttempts = 0
+			}
+
+		}
+	}
+
+	// Save the new stored values
+	saveErr := deployments.SetAttributeComplexForAllInstances(ctx, hpcTransferInfo.deploymentID, hpcTransferInfo.nodeName,
+		datasetReplicationConsulAttribute, datasetReplication)
+	if saveErr != nil {
+		saveErr = errors.Wrapf(err, "Failed to store %s %s %s value %+v", hpcTransferInfo.deploymentID,
+			hpcTransferInfo.nodeName, datasetReplicationConsulAttribute, datasetReplication)
+		err = saveErr
+	}
+
+	return replicatingIDs, replicationDone, err
+}
+
+func (o *ActionOperator) updateRequestsStatus(ctx context.Context, ddiClient ddi.Client,
+	storedFiles map[string]StoredFileInfo, toBeStored map[string]ToBeStoredFileInfo,
+	datasetReplication map[string]DatasetReplicationInfo,
+	hpcTransferInfo hpcTransferContextInfo) (map[string]StoredFileInfo, []string, error) {
+
+	remainingRequests := make(map[string]StoredFileInfo)
+	failedRequests := make(map[string]StoredFileInfo)
+	groupIDCompleteStatus := make(map[string]bool)
+	var groupIDDone []string
+
+	// A group ID is not yet complete if files are still to be stored for this group ID
+	for _, tobeStoredInfo := range toBeStored {
+		if tobeStoredInfo.GroupIdentifier != "" {
+			groupIDCompleteStatus[tobeStoredInfo.GroupIdentifier] = false
+		}
+	}
+
+	// Update the request status for all data transfer requests in progress
+	for name, storedFileInfo := range storedFiles {
+		status := storedFileInfo.Status
+		if status == requestStatusCompleted {
+			continue
+		}
+
+		if storedFileInfo.RequestID == "" {
+			// Previous submission failed
+			failedRequests[name] = storedFileInfo
+			continue
+		}
+
+		var requestStatus, errorMessage string
+		ddiStatus, _, err := ddiClient.GetDataTransferRequestStatus(hpcTransferInfo.token, storedFileInfo.RequestID)
+		if err != nil {
+			log.Printf("Failed to get status of DDI request %s : %s", storedFileInfo.RequestID, err.Error())
+			requestStatus = requestStatusFailed
+			errorMessage = err.Error()
+		} else {
+			requestStatus, errorMessage, err = o.getRequestStatusFromDDIStatus(ddiStatus)
+			if err != nil {
+				log.Printf("Failed to match status of DDI request %s : %s", storedFileInfo.RequestID, err.Error())
+				requestStatus = requestStatusFailed
+				errorMessage = err.Error()
+
+			}
+		}
+		storedFileInfo.Status = requestStatus
+		if errorMessage != "" {
+			storedFileInfo.ErrorMessage = errorMessage
+			failedRequests[name] = storedFileInfo
+			if storedFileInfo.GroupIdentifier != "" {
+				groupIDCompleteStatus[storedFileInfo.GroupIdentifier] = false
+			}
+		} else if requestStatus != requestStatusCompleted {
+			remainingRequests[name] = storedFileInfo
+			if storedFileInfo.GroupIdentifier != "" {
+				groupIDCompleteStatus[storedFileInfo.GroupIdentifier] = false
+			}
+		} else if storedFileInfo.GroupIdentifier != "" {
+			// Request completed
+			_, found := groupIDCompleteStatus[storedFileInfo.GroupIdentifier]
+			if !found {
+				groupIDCompleteStatus[storedFileInfo.GroupIdentifier] = true
+			}
+		}
+		storedFiles[name] = storedFileInfo
+	}
+
+	// Check group IDs for which there is no request pending anymore
+	for groupID, done := range groupIDCompleteStatus {
+		if done {
+			groupIDDone = append(groupIDDone, groupID)
+		}
+	}
+
+	// Retry requests that failed
+	var err error
+	for name, failedRequest := range failedRequests {
+		failedRequest.NumberOfAttempts = failedRequest.NumberOfAttempts + 1
+		if failedRequest.NumberOfAttempts > 5 {
+			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelERROR, hpcTransferInfo.deploymentID).RegisterAsString(
+				fmt.Sprintf("Submitted request to store %s, request_id %s failed at attempt %d with error %s",
+					name, failedRequest.RequestID, failedRequest.NumberOfAttempts, failedRequest.ErrorMessage))
+			err = errors.Errorf("Failed to store %s in DDI, DDI request %s error %s", name,
+				failedRequest.RequestID, failedRequest.ErrorMessage)
+			break
+		}
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelWARN, hpcTransferInfo.deploymentID).RegisterAsString(
+			fmt.Sprintf("Retrying submitted DDI request to store %s, request %s which failed at attempt %d with error %s",
+				name, failedRequest.RequestID, failedRequest.NumberOfAttempts, failedRequest.ErrorMessage))
+		sourcePath := path.Join(hpcTransferInfo.jobDirPath, name)
+		var datasetPath string
+		if failedRequest.GroupIdentifier == "" {
+			datasetPath = hpcTransferInfo.defaultPath
+		} else {
+			datasetPath = datasetReplication[failedRequest.GroupIdentifier].DatasetPath
+		}
+		requestID, submitErr := ddiClient.SubmitHPCToDDIDataTransfer(hpcTransferInfo.metadata, hpcTransferInfo.token, hpcTransferInfo.sourceSystem,
+			sourcePath, datasetPath,
+			hpcTransferInfo.heappeURL, hpcTransferInfo.jobID, hpcTransferInfo.taskID)
+		if submitErr != nil {
+			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelWARN, hpcTransferInfo.deploymentID).RegisterAsString(
+				fmt.Sprintf("Failed to submit data transfer of %s to DDI, error %s",
+					name, submitErr.Error()))
+			failedRequest.RequestID = ""
+			failedRequest.ErrorMessage = submitErr.Error()
+			failedRequest.Status = requestStatusFailed
+			failedRequest.NumberOfAttempts = failedRequest.NumberOfAttempts + 1
+		} else {
+			failedRequest.RequestID = requestID
+			failedRequest.Status = requestStatusPending
+			failedRequest.ErrorMessage = ""
+			failedRequest.NumberOfAttempts = 0
+			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, hpcTransferInfo.deploymentID).RegisterAsString(
+				fmt.Sprintf("Submitted request to store %s, request_id %s", sourcePath, requestID))
+		}
+		storedFiles[name] = failedRequest
+		remainingRequests[name] = failedRequest
+
+	}
+
+	// Save the new stored values
+	saveErr := deployments.SetAttributeComplexForAllInstances(ctx, hpcTransferInfo.deploymentID, hpcTransferInfo.nodeName,
+		storedFilesConsulAttribute, storedFiles)
+	if saveErr != nil {
+		saveErr = errors.Wrapf(err, "Failed to store %s %s %s value %+v",
+			hpcTransferInfo.deploymentID, hpcTransferInfo.nodeName, storedFilesConsulAttribute, storedFiles)
+		err = saveErr
+	}
+
+	return remainingRequests, groupIDDone, err
+}
+
+func (o *ActionOperator) getGroupIdentifier(fileName, groupPattern string) string {
+	var result string
+	if groupPattern == "" {
+		return result
+	}
+
+	// TODO : remove
+	// re2 := regexp.MustCompile(`.*_t([0-9]+).dat`)
+	// fmt.Printf("%q\n", re2.FindStringSubmatch("FA/udft_b0033_h0068_t00002.dat"))
+
+	re := regexp.MustCompile(groupPattern)
+	matches := re.FindStringSubmatch(fileName)
+	if len(matches) > 1 {
+		result = matches[1]
+	}
+	return result
+}
+
+func (o *ActionOperator) setDestinationDatasetPath(ctx context.Context, ddiClient ddi.Client,
+	hpcJobMonitoringInfo hpcJobMonitoringInfo, datasetReplication map[string]DatasetReplicationInfo, token string) (string, error) {
+
+	resultPath := hpcJobMonitoringInfo.defaultPath
+
+	if hpcJobMonitoringInfo.groupID == "" {
+		return resultPath, nil
+	}
+
+	existingDataset, ok := datasetReplication[hpcJobMonitoringInfo.groupID]
+	if ok {
+		return existingDataset.DatasetPath, nil
+	}
+
+	// Create a dataset
+	metadata := hpcJobMonitoringInfo.metadata
+	metadata.Title = fmt.Sprintf("%s - ID %s", metadata.Title, hpcJobMonitoringInfo.groupID)
+	internalID, err := ddiClient.CreateEmptyDatasetInProject(token, hpcJobMonitoringInfo.projectName, hpcJobMonitoringInfo.metadata)
+	if err != nil {
+		return resultPath, errors.Wrapf(err, "Failed to create result dataset for project %s metadata %v", hpcJobMonitoringInfo.projectName, hpcJobMonitoringInfo.metadata)
+	}
+
+	// Add replication info to dataset replication for new completed groups
+	resultPath = path.Join(getDDIProjectPath(hpcJobMonitoringInfo.projectName), internalID)
+	var replications map[string]ReplicationInfo
+	if len(hpcJobMonitoringInfo.replicationSites) > 0 {
+		replications = make(map[string]ReplicationInfo)
+		for _, replicationSite := range hpcJobMonitoringInfo.replicationSites {
+			replicationLocation := replicationSite + "_iRODS"
+			replications[replicationLocation] = ReplicationInfo{}
+		}
+	}
+
+	datasetReplication[hpcJobMonitoringInfo.groupID] = DatasetReplicationInfo{
+		DatasetPath: resultPath,
+		Replication: replications,
+	}
+
+	err = deployments.SetAttributeComplexForAllInstances(ctx, hpcJobMonitoringInfo.deploymentID, hpcJobMonitoringInfo.nodeName,
+		datasetReplicationConsulAttribute, datasetReplication)
+	if err != nil {
+		return resultPath, errors.Wrapf(err, "Failed to store %s %s %s value %+v", hpcJobMonitoringInfo.deploymentID,
+			hpcJobMonitoringInfo.nodeName, datasetReplicationConsulAttribute, datasetReplication)
+	}
+
+	return resultPath, err
 }
 
 func (o *ActionOperator) getValueFromEnv(envVarName string, envVars []*operations.EnvInput) string {

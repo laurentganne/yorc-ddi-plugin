@@ -66,7 +66,8 @@ func main() {
 		job.CloudDataDeleteAction,
 		job.GetDDIDatasetInfoAction,
 		job.WaitForDatasetAction,
-		job.StoreRunningHPCJobFilesToDDIAction}
+		job.StoreRunningHPCJobFilesToDDIAction,
+		job.StoreRunningHPCJobFilesGroupByDatasetAction}
 	servConfig.ActionFunc = func() prov.ActionOperator {
 		return new(job.ActionOperator)
 	}

@@ -2,8 +2,10 @@ tosca_definitions_version: yorc_tosca_simple_yaml_1_0
 
 metadata:
   template_name: org.lexis.common.ddi-types
-  template_version: 0.1.3
+  template_version: 0.1.4
   template_author: yorc
+
+description: DDI types - Distributed Data Infrastructure
 
 imports:
   - org.lexis.common.heappe-types:1.0.6
@@ -640,6 +642,33 @@ node_types:
     derived_from: org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob
     description: >
       Transfer files from an HPC running job to DDI until this HPC job ends
+  org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIGroupByDatasetJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob
+    abstract: true
+    description: >
+      Transfer files from an HPC running job to DDI and group them per dataset according to a pattern, until this HPC job ends (abstract)
+    properties:
+      group_files_pattern:
+        type: string
+        description: >
+          Pattern identifying group of files to store in a dataset. Files with same pattern value go in the same dataset.
+          Example: For a regular expression ".*_t([0-9]+).dat" and a file myfile_t00001.dat, this will return the identifier 00001
+        required: true
+      replication_sites:
+        type: list
+        entry_schema:
+          type: string
+        description: |
+          List of sites on which the dataset should be replicated
+        required: false
+    attributes:
+      dataset_replication:
+        type: map
+        description: Map of dataset replication status per group identifier
+  org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIGroupByDatasetJob:
+    derived_from: org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIGroupByDatasetJob
+    description: >
+      Transfer files from an HPC running job to DDI and group them per dataset according to a pattern, until this HPC job ends
   org.lexis.common.ddi.nodes.DDIAccess:
     derived_from: tosca.nodes.Root
     description: >

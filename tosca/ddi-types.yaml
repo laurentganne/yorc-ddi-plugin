@@ -98,7 +98,7 @@ node_types:
           capability: tosca.capabilities.OperatingSystem
           node: tosca.nodes.Compute
           relationship: org.lexis.common.ddi.relationships.SameSite
-          occurrences: [0, 1]
+          occurrences: [1, 1]
   org.lexis.common.ddi.nodes.EnableCloudStagingAreaAccessJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     description: >
@@ -722,6 +722,9 @@ node_types:
     description: >
       Provides access to the DDI API
     attributes:
+      dataset_url:
+        type: string
+        description: DDI API dataset URL
       staging_url:
         type: string
         description: >
@@ -1123,12 +1126,105 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.RefreshTargetTokens:
+    derived_from: tosca.nodes.Root
+    description: >
+      Refreshes the access and refresh token attributes of the target
+    requirements:
+      - target:
+          capability: tosca.capabilities.Node
+          node: tosca.nodes.Root
+          relationship: tosca.relationships.DependsOn
+          occurrences: [ 1, 1 ]
+    interfaces:
+      Standard:
+        start:
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+  org.lexis.common.ddi.nodes.SSHFSMountStagingAreaDataset:
+    derived_from: tosca.nodes.SoftwareComponent
+    description: >
+       SSH mount the directory of a dataset in the staging area
+    properties:
+      token:
+        description: OpenID Connect token
+        type: string
+        required: true
+      mount_point_directory:
+        description: mount point destination directory (will be created if it does not exist)
+        type: string
+        required: true
+    attributes:
+      user_name: {get_operation_output: [SELF, Standard, start, USER]}
+      directory_absolute_path: {get_operation_output: [SELF, Standard, start, DIRECTORY_PATH]}
+      data_absolute_path: {get_operation_output: [SELF, Standard, start, DATA_PATH]}
+      staging_area_name: {get_operation_output: [SELF, Standard, start, staging_area_name]}
+      staging_area_directory_path: {get_operation_output: [SELF, Standard, start, STAGING_AREA_DIRECTORY_PATH]}
+      sshfsuser: {get_operation_output: [SELF, Standard, start, SSHFS_USER]}
+      staging_area_root_directory: {get_operation_output: [SELF, Standard, start, STAGING_AREA_ROOT_DIRECTORY]}
+      private_key_path: {get_operation_output: [SELF, Standard, start, PRIVATE_KEY_PATH]}
+      access_token:
+        type: string
+        description: OpenID Connect access token
+      refresh_token:
+        type: string
+        description: OpenID Connect refresh token
+    capabilities:
+      mounted_staging_area:
+        type: org.lexis.common.ddi.capabilities.MountedStagingAreaAccess
+      cloud_area_directory_provider:
+        type: org.lexis.common.ddi.capabilities.CloudAreaDirectoryProvider
+    requirements:
+      - ddi_access:
+          capability: org.lexis.common.ddi.capabilities.DDIAccess
+          relationship: org.lexis.common.ddi.relationships.DDIAccessProvider
+          occurrences: [1, 1]
+      - data_transfer:
+          capability: org.lexis.common.ddi.capabilities.DataTransferCloud
+          relationship: org.lexis.common.ddi.relationships.CloudAreaDatasetProvider
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+        start:
+          inputs:
+            ACCESS_TOKEN: { get_attribute: [SELF, access_token] }
+            MOUNT_POINT_DIRECTORY: { get_property: [SELF, mount_point_directory] }
+            URL: {get_attribute: [REQ_TARGET, ddi_access, sshfs_url]}
+            IP_ADDRESS: { get_attribute: [HOST, public_address] }
+            staging_area_name: {get_attribute: [REQ_TARGET, data_transfer, staging_area_name]}
+            STAGING_AREA_DIRECTORY: {get_attribute: [REQ_TARGET, data_transfer, staging_area_directory_path]}
+            TARGET_PATH: {get_attribute: [REQ_TARGET, data_transfer, destination_path]}
+          implementation: playbooks/sshfs_export_mount.yaml
+        stop:
+          inputs:
+            ACCESS_TOKEN: { get_attribute: [SELF, access_token] }
+            URL: {get_attribute: [REQ_TARGET, ddi_access, sshfs_url]}
+            SSHFS_USER: { get_attribute: [SELF, sshfsuser] }
+            STAGING_AREA_ROOT_DIRECTORY: { get_attribute: [SELF, staging_area_root_directory] }
+            MOUNT_POINT_DIRECTORY: { get_property: [SELF, mount_point_directory] }
+            PRIVATE_KEY_PATH: { get_attribute: [SELF, private_key_path] }
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
+      custom:
+        refresh_token:
+          implementation:
+            file: "embedded"
+            type: org.lexis.common.ddi.artifacts.Deployment
 capability_types:
   org.lexis.common.ddi.capabilities.DDIAccess:
     derived_from: tosca.capabilities.Root
     description: >
       A capability providing details on the access to DDI
     attributes:
+      dataset_url:
+        type: string
+        description: DDI API dataset URL
       staging_url:
         type: string
         description: DDI API staging URL
@@ -1246,6 +1342,27 @@ capability_types:
       size:
         type: string
         description: Size of the dataset in bytes
+  org.lexis.common.ddi.capabilities.MountedStagingAreaAccess:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability fulfilling requirements of a node requiring to be
+      associated with a mounted staging area.
+    attributes:
+      staging_area_name:
+        type: string
+        description: Name of the cloud staging area
+      directory_absolute_path:
+        type: string
+        description: Directory where the cloud staging area file system is mounted
+      data_absolute_path:
+        type: string
+        description: >
+          Path to the cloud staging area data.
+          This is the same as directory_absolute_path when the data is a dataset.
+          This is a file path, when the data is a file copied in directory_absolute_path.
+      user_name:
+        type: string
+        description: name of the user allowed to write in this staging area
 relationship_types:
   org.lexis.common.ddi.relationships.SameSite:
     derived_from: tosca.relationships.DependsOn

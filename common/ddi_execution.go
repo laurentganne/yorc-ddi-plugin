@@ -381,17 +381,26 @@ func (e *DDIExecution) SetCloudStagingAreaAccessCapabilityAttributes(ctx context
 func (e *DDIExecution) SetDDIAccessCapabilityAttributes(ctx context.Context, ddiClient ddi.Client) error {
 
 	err := deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		ddiAccessCapability, "dataset_url", ddiClient.GetDatasetURL())
+	if err != nil {
+		return err
+	}
+	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		ddiAccessCapability, "staging_url", ddiClient.GetStagingURL())
 	if err != nil {
 		return err
 	}
-
 	err = deployments.SetCapabilityAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		ddiAccessCapability, "sshfs_url", ddiClient.GetSshfsURL())
 	if err != nil {
 		return err
 	}
 	// Adding as well node template attributes
+	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
+		"dataset_url", ddiClient.GetDatasetURL())
+	if err != nil {
+		return err
+	}
 	err = deployments.SetAttributeForAllInstances(ctx, e.DeploymentID, e.NodeName,
 		"staging_url", ddiClient.GetStagingURL())
 	if err != nil {
@@ -460,35 +469,37 @@ func (e *DDIExecution) SetDatasetInfoCapabilityNumberOfSmallFilesAttribute(ctx c
 // GetDDIClientFromAssociatedComputeLocation gets a DDI client corresponding to the location
 // on which the associated compute instance is running
 func (e *DDIExecution) GetDDIClientFromAssociatedComputeLocation(ctx context.Context) (ddi.Client, error) {
-	return e.getDDIClientFromRequirement(ctx, associatedComputeInstanceRequirementName)
+	ddiClient, _, _, err := e.GetDDIClientFromRequirement(ctx, associatedComputeInstanceRequirementName)
+	return ddiClient, err
 }
 
 // GetDDIClientFromHostingComputeLocation gets a DDI client corresponding to the location
 // on which the hosting compute instance is running
-func (e *DDIExecution) GetDDIClientFromHostingComputeLocation(ctx context.Context) (ddi.Client, error) {
-	return e.getDDIClientFromRequirement(ctx, hostingComputeInstanceRequirementName)
+func (e *DDIExecution) GetDDIClientFromHostingComputeLocation(ctx context.Context) (ddi.Client, config.DynamicMap, error) {
+	ddiClient, locationProps, _, err := e.GetDDIClientFromRequirement(ctx, hostingComputeInstanceRequirementName)
+	return ddiClient, locationProps, err
 }
 
-// getDDIClientFromRequirement gets a DDI client corresponding to the location
+// GetDDIClientFromRequirement gets a DDI client and location properties corresponding to the location
 // on which the associated compute instance is running
-func (e *DDIExecution) getDDIClientFromRequirement(ctx context.Context, requirementName string) (ddi.Client, error) {
+func (e *DDIExecution) GetDDIClientFromRequirement(ctx context.Context, requirementName string) (ddi.Client, config.DynamicMap, string, error) {
 	// First get the associated compute node
 	targetNodeName, err := deployments.GetTargetNodeForRequirementByName(ctx,
 		e.DeploymentID, e.NodeName, requirementName)
 	if err != nil {
-		return nil, err
+		return nil, nil, targetNodeName, err
 	}
 
 	locationMgr, err := locations.GetManager(e.Cfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, targetNodeName, err
 	}
 
 	var locationProps config.DynamicMap
 	found, locationName, err := deployments.GetNodeMetadata(ctx, e.DeploymentID,
 		targetNodeName, tosca.MetadataLocationNameKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, targetNodeName, err
 	}
 
 	if found {
@@ -499,14 +510,15 @@ func (e *DDIExecution) getDDIClientFromRequirement(ctx context.Context, requirem
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, nil, targetNodeName, err
 	}
 
 	var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
-		accessToken, _, err := RefreshToken(ctx, locationProps, e.DeploymentID, e.NodeName)
+		accessToken, _, err := RefreshToken(ctx, locationProps, e.DeploymentID, e.NodeName, "")
 		return accessToken, err
 	}
-	return ddi.GetClient(locationProps, refreshTokenFunc)
+	ddiClient, err := ddi.GetClient(locationProps, refreshTokenFunc)
+	return ddiClient, locationProps, targetNodeName, err
 
 }
 
@@ -548,15 +560,16 @@ func GetAAIClient(locationProps config.DynamicMap) yorcoidc.Client {
 }
 
 // RefreshToken refreshes an access token
-func RefreshToken(ctx context.Context, locationProps config.DynamicMap, deploymentID, nodeName string) (string, string, error) {
+func RefreshToken(ctx context.Context, locationProps config.DynamicMap, deploymentID, nodeName, refreshToken string) (string, string, error) {
 
-	var refreshToken string
-	val, err := deployments.GetInstanceAttributeValue(ctx, deploymentID, nodeName, "0", RefreshTokenConsulAttribute)
-	if err != nil {
-		return "", "", err
-	}
-	if val != nil {
-		refreshToken = val.RawString()
+	if refreshToken == "" {
+		val, err := deployments.GetInstanceAttributeValue(ctx, deploymentID, nodeName, "0", RefreshTokenConsulAttribute)
+		if err != nil {
+			return "", "", err
+		}
+		if val != nil {
+			refreshToken = val.RawString()
+		}
 	}
 
 	aaiClient := GetAAIClient(locationProps)

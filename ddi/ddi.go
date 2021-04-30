@@ -169,7 +169,7 @@ func (d *ddiClient) IsAlive() bool {
 
 	response, err := http.Get(d.StagingURL)
 	if err != nil {
-		log.Debugf("DDI client isAlive(): request to %s returned %s\n", d.StagingURL, err.Error())
+		log.Printf("DDI client isAlive(): request to %s returned %s\n", d.StagingURL, err.Error())
 		return false
 	}
 	response.Body.Close()

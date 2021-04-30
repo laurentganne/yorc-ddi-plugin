@@ -222,20 +222,9 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	}
 
 	if !valid {
-		accessToken, refreshToken, err = aaiClient.RefreshToken(ctx, refreshToken)
+		_, _, err = common.RefreshToken(ctx, locationProps, deploymentID, nodeName, refreshToken)
 		if err != nil {
 			return exec, errors.Wrapf(err, "Failed to refresh token for orchestrator")
-		}
-		// Store these values
-		err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
-			common.AccessTokenConsulAttribute, accessToken)
-		if err != nil {
-			return exec, errors.Wrapf(err, "Job %s, failed to store access token", nodeName)
-		}
-		err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
-			common.RefreshTokenConsulAttribute, refreshToken)
-		if err != nil {
-			return exec, errors.Wrapf(err, "Job %s, failed to store refresh token", nodeName)
 		}
 	}
 

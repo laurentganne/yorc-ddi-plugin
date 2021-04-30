@@ -192,7 +192,7 @@ func getDDIClient(ctx context.Context, cfg config.Configuration, deploymentID, n
 	}
 
 	var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
-		accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID, nodeName)
+		accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID, nodeName, "")
 		return accessToken, err
 	}
 
@@ -214,17 +214,15 @@ func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deployment
 		return ddiClient, locationName, err
 	}
 
-	locationProps, err := locationMgr.GetLocationProperties(locationName, common.DDIInfrastructureType)
-	if err != nil {
-		return ddiClient, locationName, err
-	}
-
-	var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
-		accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID, nodeName)
-		return accessToken, err
-	}
-
 	if found {
+		locationProps, err := locationMgr.GetLocationProperties(locationName, common.DDIInfrastructureType)
+		if err != nil {
+			return ddiClient, locationName, err
+		}
+		var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
+			accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID, nodeName, "")
+			return accessToken, err
+		}
 		// Check if the corresponding DDI client is alive
 		ddiClient, err = ddi.GetClient(locationProps, refreshTokenFunc)
 		if err != nil {
@@ -249,6 +247,10 @@ func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deployment
 			locationProps, err := locationMgr.GetLocationProperties(loc.Name, common.DDIInfrastructureType)
 			if err != nil {
 				return ddiClient, locationName, err
+			}
+			var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
+				accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID, nodeName, "")
+				return accessToken, err
 			}
 			ddiClient, err = ddi.GetClient(locationProps, refreshTokenFunc)
 			if err != nil {

@@ -98,7 +98,7 @@ node_types:
           capability: tosca.capabilities.OperatingSystem
           node: tosca.nodes.Compute
           relationship: org.lexis.common.ddi.relationships.SameSite
-          occurrences: [1, 1]
+          occurrences: [0, 1]
   org.lexis.common.ddi.nodes.EnableCloudStagingAreaAccessJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     description: >
@@ -265,6 +265,12 @@ node_types:
     capabilities:
       data_transfer:
         type: org.lexis.common.ddi.capabilities.DataTransferCloud
+    requirements:
+      - os:
+          capability: tosca.capabilities.OperatingSystem
+          node: tosca.nodes.Compute
+          relationship: org.lexis.common.ddi.relationships.SameSite
+          occurrences: [1, 1]
     interfaces:
       Standard:
         create:

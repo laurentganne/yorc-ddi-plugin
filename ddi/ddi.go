@@ -175,10 +175,6 @@ func (d *ddiClient) IsAlive() bool {
 	response.Body.Close()
 	log.Debugf("DDI client isAlive(): request to %s returned status %d\n", d.StagingURL, response.StatusCode)
 
-	// TODO: to remove when IT4I will have the endpoint
-	if d.ddiArea == "it4i_iRODS" {
-		return false
-	}
 	return response.StatusCode == 200 || response.StatusCode == 301 || response.StatusCode == 302
 }
 
@@ -486,7 +482,7 @@ func (d *ddiClient) GetReplicationStatus(token, targetSystem, targetPath string)
 	var err error
 	// Retrying several times as this call regularly returns an error 500 Internal Server Error
 	for i := 1; i < 5; i++ {
-		err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingReplicationStatusREST,
+		err = d.httpStagingClient.doRequest(http.MethodPost, ddiStagingReplicationStatusREST,
 			[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
 		if err != nil {
 			err = errors.Wrapf(err, "Failed to submit replication status request for system %s path %s", targetSystem, targetPath)

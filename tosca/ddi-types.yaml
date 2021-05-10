@@ -102,7 +102,7 @@ node_types:
   org.lexis.common.ddi.nodes.EnableCloudStagingAreaAccessJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     description: >
-      Enable the access to the Cloud Staging Area for a Compute Instance
+      Enable the access to the Cloud Staging Area for a Compute Instance for NFS mounts
     properties:
       token:
         description: OpenID Connect token
@@ -171,7 +171,7 @@ node_types:
   org.lexis.common.ddi.nodes.DisableCloudStagingAreaAccessJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     description: >
-      Disable the access to the Cloud Staging Area for a Compute Instance
+      Disable the access to the Cloud Staging Area for a Compute Instance for NFS mounts
     properties:
       token:
         description: OpenID Connect token
@@ -217,11 +217,10 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
-  org.lexis.common.ddi.nodes.pub.DDIToCloudJob:
+  org.lexis.common.ddi.nodes.DDIToCloudJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
-    abstract: true
     description: >
-      Transfer datasets from DDI to Cloud staging area (abstract)
+      Transfer dataset from DDI to Cloud staging area
     properties:
       token:
         description: OpenID Connect token
@@ -296,15 +295,10 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
-  org.lexis.common.ddi.nodes.DDIToCloudJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.DDIToCloudJob
-    description: >
-      Transfer datasets from DDI to Cloud staging area
-  org.lexis.common.ddi.nodes.pub.CloudToDDIJob:
+  org.lexis.common.ddi.nodes.CloudToDDIJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
-    abstract: true
     description: >
-      Transfer data from Cloud staging area to DDI (abstract)
+      Transfer data from Cloud staging area to DDI
     properties:
       token:
         description: OpenID Connect token
@@ -374,15 +368,10 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
-  org.lexis.common.ddi.nodes.CloudToDDIJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.CloudToDDIJob
-    description: >
-      Transfer data from Cloud staging area to DDI
-  org.lexis.common.ddi.nodes.pub.DeleteCloudDataJob:
+  org.lexis.common.ddi.nodes.DeleteCloudDataJob:
     derived_from: tosca.nodes.Root
-    abstract: true
     description: >
-      Delete a dataset from Cloud staging area (abstract)
+      Delete a dataset from Cloud staging area
     properties:
       token:
         description: OpenID Connect token
@@ -430,15 +419,10 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
-  org.lexis.common.ddi.nodes.DeleteCloudDataJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.DeleteCloudDataJob
-    description: >
-      Delete a dataset from Cloud staging area
-  org.lexis.common.ddi.nodes.pub.DDIToHPCTaskJob:
+  org.lexis.common.ddi.nodes.DDIToHPCTaskJob:
     derived_from: tosca.nodes.Root
-    abstract: true
     description: >
-      Transfer datasets from DDI to HPC staging area for a given task in the job (abstract)
+      Transfer dataset from DDI to HPC staging area for a given task in the job
     properties:
       token:
         description: OpenID Connect token
@@ -508,15 +492,10 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
-  org.lexis.common.ddi.nodes.DDIToHPCTaskJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.DDIToHPCTaskJob
-    description: >
-      Transfer datasets from DDI to HPC staging area for a given task in the job
-  org.lexis.common.ddi.nodes.pub.HPCToDDIJob:
+  org.lexis.common.ddi.nodes.HPCToDDIJob:
     derived_from: tosca.nodes.Root
-    abstract: true
     description: >
-      Transfer data from an HPC job to DDI (abstract)
+      Transfer data from an HPC job to DDI
     properties:
       token:
         description: OpenID Connect token
@@ -594,15 +573,10 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
-  org.lexis.common.ddi.nodes.HPCToDDIJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.HPCToDDIJob
-    description: >
-      Transfer data from an HPC job to DDI
-  org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob:
+  org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIJob:
     derived_from: tosca.nodes.Root
-    abstract: true
     description: >
-      Transfer files from an HPC running job to DDI until this HPC job ends (abstract)
+      Transfer files from an HPC running job to DDI until this HPC job ends
     properties:
       token:
         description: OpenID Connect token
@@ -692,15 +666,10 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
-  org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob
+  org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIGroupByDatasetJob:
+    derived_from: org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIJob
     description: >
-      Transfer files from an HPC running job to DDI until this HPC job ends
-  org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIGroupByDatasetJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob
-    abstract: true
-    description: >
-      Transfer files from an HPC running job to DDI and group them per dataset according to a pattern, until this HPC job ends (abstract)
+      Transfer files from an HPC running job to DDI and group them per dataset according to a pattern, until this HPC job ends
     properties:
       group_files_pattern:
         type: string
@@ -719,10 +688,6 @@ node_types:
       dataset_replication:
         type: map
         description: Map of dataset replication status per group identifier
-  org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIGroupByDatasetJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIGroupByDatasetJob
-    description: >
-      Transfer files from an HPC running job to DDI and group them per dataset according to a pattern, until this HPC job ends
   org.lexis.common.ddi.nodes.DDIAccess:
     derived_from: tosca.nodes.Root
     description: >
@@ -754,11 +719,10 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
-  org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob:
+  org.lexis.common.ddi.nodes.WaitForDDIDatasetJob:
     derived_from: tosca.nodes.Root
-    abstract: true
     description: >
-      Wait for a dataset to appear in DDI, and optionally wait for files in this dataset (abstract)
+      Wait for a dataset to appear in DDI, and optionally wait for files in this dataset
     properties:
       token:
         description: OpenID Connect token
@@ -823,15 +787,10 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
-  org.lexis.common.ddi.nodes.WaitForDDIDatasetJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob
-    description: >
-      Wait for a dataset to appear in DDI, and optionally wait for files in this dataset
-  org.lexis.common.ddi.nodes.pub.DDIRuntimeToCloudJob:
+  org.lexis.common.ddi.nodes.DDIRuntimeToCloudJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
-    abstract: true
     description: >
-      Transfer from DDI to Cloud staging area, a dataset (or one dataset file) selected at runtime (abstract)
+      Transfer from DDI to Cloud staging area, a dataset (or one dataset file) selected at runtime
     properties:
       token:
         description: OpenID Connect token
@@ -882,7 +841,7 @@ node_types:
     requirements:
       - dataset_files:
           capability: org.lexis.common.ddi.capabilities.DatasetFilesProvider
-          node: org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob
+          node: org.lexis.common.ddi.nodes.WaitForDDIDatasetJob
           relationship: org.lexis.common.ddi.relationships.DatasetFilesProvider
           occurrences: [1, 1]
     interfaces:
@@ -912,15 +871,10 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
-  org.lexis.common.ddi.nodes.DDIRuntimeToCloudJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.DDIRuntimeToCloudJob
-    description: >
-      Transfer from DDI to Cloud staging area, a dataset (or one dataset file) selected at runtime
-  org.lexis.common.ddi.nodes.pub.DDIRuntimeToHPCTaskJob:
+  org.lexis.common.ddi.nodes.DDIRuntimeToHPCTaskJob:
     derived_from: tosca.nodes.Root
-    abstract: true
     description: >
-      Transfer from DDI to HPC staging area, a dataset (or one dataset file) selected at runtime (abstract)
+      Transfer from DDI to HPC staging area, a dataset (or one dataset file) selected at runtime
     properties:
       token:
         description: OpenID Connect token
@@ -963,7 +917,7 @@ node_types:
           occurrences: [1, 1]
       - dataset_files:
           capability: org.lexis.common.ddi.capabilities.DatasetFilesProvider
-          node: org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob
+          node: org.lexis.common.ddi.nodes.WaitForDDIDatasetJob
           relationship: org.lexis.common.ddi.relationships.DatasetFilesProvider
           occurrences: [1, 1]
     interfaces:
@@ -997,10 +951,6 @@ node_types:
           implementation:
             file: "embedded"
             type: org.lexis.common.ddi.artifacts.Deployment
-  org.lexis.common.ddi.nodes.DDIRuntimeToHPCTaskJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.DDIRuntimeToHPCTaskJob
-    description: >
-      Transfer from DDI to HPC staging area, a dataset (or dataset files) selected at runtime
   org.lexis.common.ddi.nodes.pub.GetDatasetInfo:
     derived_from: tosca.nodes.Root
     description: >

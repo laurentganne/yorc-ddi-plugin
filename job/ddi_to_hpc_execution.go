@@ -157,7 +157,18 @@ func (e *DDIToHPCExecution) submitDataTransferRequest(ctx context.Context) error
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, token, sourcePath, targetSystem, taskDirPath, heappeURL, heappeJobID, taskID)
+	// Check encryption/compression settings
+	decrypt := "no"
+	if e.GetBooleanValueFromEnvInputs(decryptEnvVar) {
+		decrypt = "yes"
+	}
+	uncompress := "no"
+	if e.GetBooleanValueFromEnvInputs(uncompressEnvVar) {
+		uncompress = "yes"
+	}
+
+	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, token, sourcePath, targetSystem, taskDirPath,
+		decrypt, uncompress, heappeURL, heappeJobID, taskID)
 	if err != nil {
 		return err
 	}

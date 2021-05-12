@@ -222,6 +222,16 @@ node_types:
         description: Path of the DDI dataset to transfer to the Cloud staging area
         type: string
         required: true
+      decrypt:
+        description: Should the dataset be decrypted after transfer
+        type: boolean
+        default: false
+        required: false
+      uncompress:
+        description: Should the dataset be uncompressed after transfer
+        type: boolean
+        default: false
+        required: false
       cloud_staging_area_directory_path:
         type: string
         description: >
@@ -278,6 +288,8 @@ node_types:
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
+            DECRYPT: { get_property: [SELF, decrypt] }
+            UNCOMPRESS: { get_property: [SELF, uncompress] }
             CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_property: [SELF, cloud_staging_area_directory_path] }
             TIMESTAMP_CLOUD_STAGING_AREA_DIRECTORY: { get_property: [SELF, timestamp_cloud_staging_area_directory] }
           implementation:
@@ -296,6 +308,16 @@ node_types:
         description: OpenID Connect token
         type: string
         required: true
+      encrypt:
+        description: Should the dataset be encrypted
+        type: boolean
+        default: false
+        required: false
+      compress:
+        description: Should the dataset be compressed
+        type: boolean
+        default: false
+        required: false
       metadata:
         description: Dataset metadata
         type: org.lexis.common.ddi.types.Metadata
@@ -352,6 +374,8 @@ node_types:
             SOURCE_SUBDIRECTORY:  { get_property: [SELF, source_subdirectory] }
             SOURCE_FILE_NAME:  { get_property: [SELF, source_file_name] }
             DDI_PATH: { get_property: [SELF, ddi_path] }
+            ENCRYPT: { get_property: [SELF, encrypt] }
+            COMPRESS: { get_property: [SELF, compress] }
             CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_directory_provider, staging_area_directory_path] }
           implementation:
             file: ddi-types-a4c.yaml
@@ -420,10 +444,6 @@ node_types:
         description: OpenID Connect token
         type: string
         required: true
-      metadata:
-        description: Dataset metadata
-        type: org.lexis.common.ddi.types.Metadata
-        required: false
       ddi_dataset_path:
         description: Path of the DDI dataset to transfer to HPC
         type: string
@@ -432,6 +452,20 @@ node_types:
         description: Name of the task in the Job
         type: string
         required: true
+      decrypt:
+        description: Should the dataset be decrypted after transfer
+        type: boolean
+        default: false
+        required: false
+      uncompress:
+        description: Should the dataset be uncompressed after transfer
+        type: boolean
+        default: false
+        required: false
+      metadata:
+        description: Dataset metadata
+        type: org.lexis.common.ddi.types.Metadata
+        required: false
     attributes:
       request_id:
         type: string
@@ -470,6 +504,8 @@ node_types:
           TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
+            DECRYPT: { get_property: [SELF, decrypt] }
+            UNCOMPRESS: { get_property: [SELF, uncompress] }
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
             HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
             HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
@@ -504,6 +540,16 @@ node_types:
       task_name:
         description: Name of the task for which to store results. If not set, all tasks results are saved.
         type: string
+        required: false
+      encrypt:
+        description: Should the dataset be encrypted
+        type: boolean
+        default: false
+        required: false
+      compress:
+        description: Should the dataset be compressed
+        type: boolean
+        default: false
         required: false
     attributes:
       request_id:
@@ -550,6 +596,8 @@ node_types:
             TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
             TASK_NAME: {get_property: [SELF, task_name]}
             DDI_PATH: { get_property: [SELF, ddi_path] }
+            ENCRYPT: { get_property: [SELF, encrypt] }
+            COMPRESS: { get_property: [SELF, compress] }
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -574,6 +622,16 @@ node_types:
         description: Name of the project where to store the result dataset
         type: string
         required: true
+      encrypt:
+        description: Should the dataset be encrypted
+        type: boolean
+        default: false
+        required: false
+      compress:
+        description: Should the dataset be compressed
+        type: boolean
+        default: false
+        required: false
       last_modification_elapsed_time_minutes:
         description: Elapsed time in minutes since last modification after which a file can be stored in DDI
         type: integer
@@ -643,6 +701,8 @@ node_types:
             JOB_CHANGED_FILES: {get_attribute: [REQ_TARGET, job, changed_files]}
             JOB_START_DATE: {get_attribute: [REQ_TARGET, job, start_date]}
             JOB_STATE: {get_attribute: [REQ_TARGET, job, state]}
+            ENCRYPT: { get_property: [SELF, encrypt] }
+            COMPRESS: { get_property: [SELF, compress] }
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -788,7 +848,7 @@ node_types:
         default: ""
       timestamp_cloud_staging_area_directory:
         type: boolean
-        description: Add a tiemstamp to cloud_staging_area_directory_path
+        description: Add a timestamp to cloud_staging_area_directory_path
         default: false
         required: false
     attributes:
@@ -1068,7 +1128,7 @@ node_types:
   org.lexis.common.ddi.nodes.SSHFSMountStagingAreaDataset:
     derived_from: tosca.nodes.SoftwareComponent
     description: >
-       SSH mount the directory of a dataset in the staging area
+       SSHFS mount a dataset in the Cloud staging area on a compute instance directory
     properties:
       token:
         description: OpenID Connect token

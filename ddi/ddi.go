@@ -93,12 +93,12 @@ type Client interface {
 	GetDisableCloudAccessRequestStatus(token, requestID string) (string, error)
 	GetEnableCloudAccessRequestStatus(token, requestID string) (string, error)
 	SubmitCloudStagingAreaDataDeletion(token, path string) (string, error)
-	SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error)
+	SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath, encryption, compression string) (string, error)
 	SubmitDDIDatasetInfoRequest(token, targetSystem, ddiPath string) (string, error)
 	SubmitDDIDataDeletion(token, path string) (string, error)
-	SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
-	SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath, heappeURL string, jobID, taskID int64) (string, error)
-	SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath, heappeURL string, jobID, taskID int64) (string, error)
+	SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath, encryption, compression string) (string, error)
+	SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath, encryption, compression, heappeURL string, jobID, taskID int64) (string, error)
+	SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath, encryption, compression, heappeURL string, jobID, taskID int64) (string, error)
 	SubmitDDIReplicationRequest(token, sourceSystem, sourcePath, targetSystem string) (string, error)
 	GetCloudStagingAreaProperties() LocationCloudStagingArea
 	GetDDIDatasetInfoRequestStatus(token, requestID string) (string, string, string, string, error)
@@ -235,7 +235,7 @@ func (d *ddiClient) GetDisableCloudAccessRequestStatus(token, requestID string) 
 }
 
 // SubmitDDIToCloudDataTransfer submits a data transfer request from DDI to Cloud
-func (d *ddiClient) SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error) {
+func (d *ddiClient) SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath, encryption, compression string) (string, error) {
 
 	request := DataTransferRequest{
 		Metadata:     metadata,
@@ -243,6 +243,8 @@ func (d *ddiClient) SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSo
 		SourcePath:   ddiSourcePath,
 		TargetSystem: d.cloudStagingArea.Name,
 		TargetPath:   cloudStagingAreaDestinationPath,
+		Encryption:   encryption,
+		Compression:  compression,
 	}
 
 	requestStr, _ := json.Marshal(request)
@@ -280,7 +282,7 @@ func (d *ddiClient) SubmitDDIDatasetInfoRequest(token, targetSystem, ddiPath str
 }
 
 // SubmitCloudToDDIDataTransfer submits a data transfer request from Cloud to DDI
-func (d *ddiClient) SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error) {
+func (d *ddiClient) SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath, encryption, compression string) (string, error) {
 
 	request := DataTransferRequest{
 		Metadata:     metadata,
@@ -288,6 +290,8 @@ func (d *ddiClient) SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloud
 		SourcePath:   cloudStagingAreaSourcePath,
 		TargetSystem: d.ddiArea,
 		TargetPath:   ddiDestinationPath,
+		Encryption:   encryption,
+		Compression:  compression,
 	}
 	var response SubmittedRequestInfo
 	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingStageREST,
@@ -334,7 +338,7 @@ func (d *ddiClient) SubmitCloudStagingAreaDataDeletion(token, path string) (stri
 }
 
 // SubmitDDIToHPCDataTransfer submits a data transfer request from DDI to HPC
-func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath, heappeURL string, jobID, taskID int64) (string, error) {
+func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath, encryption, compression, heappeURL string, jobID, taskID int64) (string, error) {
 
 	request := HPCDataTransferRequest{
 		DataTransferRequest{
@@ -343,6 +347,8 @@ func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSour
 			SourcePath:   ddiSourcePath,
 			TargetSystem: targetSystem,
 			TargetPath:   hpcDirectoryPath,
+			Encryption:   encryption,
+			Compression:  compression,
 		},
 		DataTransferRequestHPCExtension{
 			HEAppEURL: heappeURL,
@@ -365,7 +371,7 @@ func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSour
 }
 
 // SubmitHPCToDDIDataTransfer submits a data transfer request from HPC to DDI
-func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath, heappeURL string, jobID, taskID int64) (string, error) {
+func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath, encryption, compression, heappeURL string, jobID, taskID int64) (string, error) {
 
 	request := HPCDataTransferRequest{
 		DataTransferRequest{
@@ -374,6 +380,8 @@ func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceS
 			SourcePath:   hpcDirectoryPath,
 			TargetSystem: d.ddiArea,
 			TargetPath:   ddiPath,
+			Encryption:   encryption,
+			Compression:  compression,
 		},
 		DataTransferRequestHPCExtension{
 			HEAppEURL: heappeURL,

@@ -164,8 +164,18 @@ func (e *HPCToDDIExecution) submitDataTransferRequest(ctx context.Context) error
 		return err
 	}
 
+	// Check encryption/compression settings
+	encrypt := "no"
+	if e.GetBooleanValueFromEnvInputs(encryptEnvVar) {
+		encrypt = "yes"
+	}
+	compress := "no"
+	if e.GetBooleanValueFromEnvInputs(compressEnvVar) {
+		compress = "yes"
+	}
+
 	requestID, err := ddiClient.SubmitHPCToDDIDataTransfer(metadata, token, sourceSystem,
-		sourcePath, ddiPath, heappeURL, heappeJobID, taskID)
+		sourcePath, ddiPath, encrypt, compress, heappeURL, heappeJobID, taskID)
 	if err != nil {
 		return err
 	}

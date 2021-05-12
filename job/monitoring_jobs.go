@@ -73,6 +73,8 @@ const (
 	actionDataOperation         = "operation"
 	actionDataGroupFilesPattern = "group_files_pattern"
 	actionDataReplicationSites  = "replication_sites"
+	actionDataEncrypt           = "encrypt"
+	actionDataCompress          = "compress"
 
 	datasetElementDirectoryType = "directory"
 	datasetElementFileType      = "file"
@@ -563,6 +565,16 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		}
 	}
 
+	// Get encryption/compression settings
+	encrypt, ok := action.Data[actionDataEncrypt]
+	if !ok {
+		encrypt = "no"
+	}
+	compress, ok := action.Data[actionDataCompress]
+	if !ok {
+		compress = "no"
+	}
+
 	// Get the list of already created dataset for each group and their replication status
 	var datasetReplication map[string]DatasetReplicationInfo
 	if groupFilesPattern != "" {
@@ -605,7 +617,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	default:
 		jobDone = false
 	}
-
+	log.Printf("LOLO job status %s\n", jobState)
 	ddiClient, err := getDDIClient(ctx, cfg, deploymentID, actionData.nodeName)
 	if err != nil {
 		return true, err
@@ -632,13 +644,20 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	// Get details of files to be stored
 	var toBeStoredFiles map[string]ToBeStoredFileInfo
 	val, err = deployments.GetInstanceAttributeValue(ctx, deploymentID, actionData.nodeName, "0", toBeStoredFilesConsulAttribute)
+	if err != nil {
+		log.Printf("LOLO deployments.GetInstanceAttributeValue %s %s returns %+v\n", deploymentID, actionData, err)
+	}
 	if err == nil && val != nil && val.RawString() != "" {
 		err = json.Unmarshal([]byte(val.RawString()), &toBeStoredFiles)
 		if err != nil {
 			err = errors.Wrapf(err, "Failed to parse map of to be stored files %s", val.RawString())
 			return true, err
 		}
+	} else {
+		log.Printf("LOLO deployments.GetInstanceAttributeValue %s %s returns no value\n", deploymentID, actionData)
 	}
+
+	log.Printf("LOLO consul for %s has toBeStoredFiles %+v\n", actionData.nodeName, toBeStoredFiles)
 
 	// The task ID has to be added as prefix to file patterns if a task name was specified
 	strVal := o.getValueFromEnv(tasksNameIdEnvVar, envInputs)
@@ -747,13 +766,13 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	}
 
 	log.Debugf("new files updates: %+v\n", newFilesUpdates)
+	log.Printf("LOLO new files updates: %+v\n", newFilesUpdates)
 
 	// Update the maps of files to be stored
 	toBeStoredUpdated := make(map[string]ToBeStoredFileInfo)
 	toStore := make(map[string]ChangedFile)
 	currentTime := time.Now()
-	layout = "2006-01-02T15:04:05.00Z"
-	currentDate := currentTime.Format(layout)
+	currentDate := currentTime.Format(time.RFC3339)
 	for _, changedFile := range newFilesUpdates {
 		if jobDone {
 			toStore[changedFile.FileName] = changedFile
@@ -766,15 +785,19 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 			if toBeStoredFile.LastModifiedDate == changedFile.LastModifiedDate {
 				// Already known to be stored
 				// Checking if the time to wait for its storage has elapse
-				insertTime, _ := time.Parse(layout, toBeStoredFile.CandidateToStorageDate)
+				insertTime, _ := time.Parse(time.RFC3339, toBeStoredFile.CandidateToStorageDate)
 				duration := currentTime.Sub(insertTime)
+				log.Printf("LOLO duration %s expecting %s\ncurrent time %s insert time %s\n",
+					duration.String(), elapsedDuration.String(), currentTime.String(), insertTime.String())
 				if duration >= elapsedDuration {
+					log.Printf("New file to store: %s\n", changedFile.FileName)
 					toStore[changedFile.FileName] = changedFile
 				} else {
 					toBeStoredUpdated[changedFile.FileName] = toBeStoredFile
 				}
 			}
 		} else {
+			log.Printf("LOLO new file changed: %s date %s\n", changedFile.FileName, changedFile.LastModifiedDate)
 			toBeStoredUpdated[changedFile.FileName] = ToBeStoredFileInfo{
 				GroupIdentifier:        changedFile.GroupIdentifier,
 				LastModifiedDate:       changedFile.LastModifiedDate,
@@ -784,6 +807,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	}
 
 	log.Debugf("Files to be stored updated: %+v\n", toBeStoredUpdated)
+	log.Printf("LOLO Files to be stored updated: %+v\n", toBeStoredUpdated)
 
 	// Save the new to be stored values
 	err = deployments.SetAttributeComplexForAllInstances(ctx, deploymentID, actionData.nodeName,
@@ -843,7 +867,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		}
 		sourcePath := path.Join(jobDirPath, name)
 		requestID, err := ddiClient.SubmitHPCToDDIDataTransfer(metadata, token, sourceSystem,
-			sourcePath, destPath, heappeURL, heappeJobID, taskID)
+			sourcePath, destPath, encrypt, compress, heappeURL, heappeJobID, taskID)
 		if err != nil {
 			return true, errors.Wrapf(err, "Failed to submit data transfer of %s to DDI", sourcePath)
 		}
@@ -874,12 +898,13 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		replicationSites: replicationSites,
 	}
 	remainingRequests, completedGroupsIDs, err := o.updateRequestsStatus(ctx, ddiClient,
-		storedFiles, toBeStoredUpdated, datasetReplication, hpcTransferInfo)
+		storedFiles, toBeStoredUpdated, datasetReplication, hpcTransferInfo, encrypt, compress)
 	if err != nil {
 		return true, err
 	}
 
 	log.Debugf("Files stored updated: %+v\n", storedFiles)
+	log.Printf("LOLO Files stored updated: %+v\n", storedFiles)
 
 	// Replicate completed datasets
 	replicating, replicationDone, err := o.updateReplicationStatus(
@@ -1008,7 +1033,7 @@ func (o *ActionOperator) updateReplicationStatus(ctx context.Context, ddiClient 
 func (o *ActionOperator) updateRequestsStatus(ctx context.Context, ddiClient ddi.Client,
 	storedFiles map[string]StoredFileInfo, toBeStored map[string]ToBeStoredFileInfo,
 	datasetReplication map[string]DatasetReplicationInfo,
-	hpcTransferInfo hpcTransferContextInfo) (map[string]StoredFileInfo, []string, error) {
+	hpcTransferInfo hpcTransferContextInfo, encrypt, compress string) (map[string]StoredFileInfo, []string, error) {
 
 	remainingRequests := make(map[string]StoredFileInfo)
 	failedRequests := make(map[string]StoredFileInfo)
@@ -1102,7 +1127,7 @@ func (o *ActionOperator) updateRequestsStatus(ctx context.Context, ddiClient ddi
 			datasetPath = datasetReplication[failedRequest.GroupIdentifier].DatasetPath
 		}
 		requestID, submitErr := ddiClient.SubmitHPCToDDIDataTransfer(hpcTransferInfo.metadata, hpcTransferInfo.token, hpcTransferInfo.sourceSystem,
-			sourcePath, datasetPath,
+			sourcePath, datasetPath, encrypt, compress,
 			hpcTransferInfo.heappeURL, hpcTransferInfo.jobID, hpcTransferInfo.taskID)
 		if submitErr != nil {
 			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelWARN, hpcTransferInfo.deploymentID).RegisterAsString(
@@ -1172,9 +1197,10 @@ func (o *ActionOperator) setDestinationDatasetPath(ctx context.Context, ddiClien
 	// Create a dataset
 	metadata := hpcJobMonitoringInfo.metadata
 	metadata.Title = fmt.Sprintf("%s - ID %s", metadata.Title, hpcJobMonitoringInfo.groupID)
-	internalID, err := ddiClient.CreateEmptyDatasetInProject(token, hpcJobMonitoringInfo.projectName, hpcJobMonitoringInfo.metadata)
+	internalID, err := ddiClient.CreateEmptyDatasetInProject(token, hpcJobMonitoringInfo.projectName, metadata)
 	if err != nil {
-		return resultPath, errors.Wrapf(err, "Failed to create result dataset for project %s metadata %v", hpcJobMonitoringInfo.projectName, hpcJobMonitoringInfo.metadata)
+		return resultPath, errors.Wrapf(err, "Failed to create result dataset at %s for project %s metadata %v",
+			ddiClient.GetDatasetURL(), hpcJobMonitoringInfo.projectName, metadata)
 	}
 
 	// Add replication info to dataset replication for new completed groups

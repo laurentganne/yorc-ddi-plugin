@@ -166,7 +166,17 @@ func (e *DDIRuntimeToCloudExecution) submitDataTransferRequest(ctx context.Conte
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToCloudDataTransfer(metadata, token, sourcePath, destPath)
+	// Check encryption/compression settings
+	decrypt := "no"
+	if e.GetBooleanValueFromEnvInputs(decryptEnvVar) {
+		decrypt = "yes"
+	}
+	uncompress := "no"
+	if e.GetBooleanValueFromEnvInputs(uncompressEnvVar) {
+		uncompress = "yes"
+	}
+
+	requestID, err := ddiClient.SubmitDDIToCloudDataTransfer(metadata, token, sourcePath, destPath, decrypt, uncompress)
 	if err != nil {
 		return err
 	}

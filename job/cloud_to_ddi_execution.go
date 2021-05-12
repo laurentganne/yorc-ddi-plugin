@@ -118,7 +118,17 @@ func (e *CloudToDDIJobExecution) submitDataTransferRequest(ctx context.Context) 
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitCloudToDDIDataTransfer(metadata, token, sourcePath, destPath)
+	// Check encryption/compression settings
+	encrypt := "no"
+	if e.GetBooleanValueFromEnvInputs(encryptEnvVar) {
+		encrypt = "yes"
+	}
+	compress := "no"
+	if e.GetBooleanValueFromEnvInputs(compressEnvVar) {
+		compress = "yes"
+	}
+
+	requestID, err := ddiClient.SubmitCloudToDDIDataTransfer(metadata, token, sourcePath, destPath, encrypt, compress)
 	if err != nil {
 		return err
 	}

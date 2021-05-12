@@ -49,7 +49,7 @@
         return_content: yes
         validate_certs: no
         headers:
-          Authorization: "Bearer {{ TOKEN }}"
+          Authorization: "Bearer {{ ACCESS_TOKEN }}"
         body:
           host: "{{ IP_ADDRESS }}"
           pubkey: "{{ public_key }}"

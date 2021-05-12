@@ -96,6 +96,24 @@ func (e *StoreRunningHPCJobFilesGroupByDataset) ExecuteAsync(ctx context.Context
 		groupFilesPattern = val.RawString()
 	}
 
+	// Get encryption/compression settings
+	encrypt := "no"
+	encryption, err := deployments.GetBooleanNodeProperty(ctx, e.DeploymentID, e.NodeName, encryptProperty)
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "Failed to get %s property for deployment %s node %s", encryptProperty, e.DeploymentID, e.NodeName)
+	}
+	if encryption {
+		encrypt = "yes"
+	}
+	compress := "no"
+	compression, err := deployments.GetBooleanNodeProperty(ctx, e.DeploymentID, e.NodeName, compressProperty)
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "Failed to get %s property for deployment %s node %s", compressProperty, e.DeploymentID, e.NodeName)
+	}
+	if compression {
+		compress = "yes"
+	}
+
 	// List of sites where to replicate datasets
 	val, err = deployments.GetNodePropertyValue(ctx, e.DeploymentID, e.NodeName, replicationSitesProperty)
 	if err != nil {
@@ -156,6 +174,8 @@ func (e *StoreRunningHPCJobFilesGroupByDataset) ExecuteAsync(ctx context.Context
 	data[actionDataReplicationSites] = replicationSitesStr
 	data[actionDataDDIProjectName] = project.RawString()
 	data[actionDataMetadata] = metadataStr
+	data[actionDataEncrypt] = encrypt
+	data[actionDataCompress] = compress
 
 	return &prov.Action{ActionType: StoreRunningHPCJobFilesGroupByDatasetAction, Data: data}, e.MonitoringTimeInterval, nil
 }

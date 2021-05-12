@@ -43,15 +43,16 @@ const (
 	disableCloudStagingAreaJobType          = "org.lexis.common.ddi.nodes.DisableCloudStagingAreaAccessJob"
 	ddiToCloudJobType                       = "org.lexis.common.ddi.nodes.DDIToCloudJob"
 	ddiToHPCTaskJobType                     = "org.lexis.common.ddi.nodes.DDIToHPCTaskJob"
-	hpcToDDIJobType                         = "org.lexis.common.ddi.nodes.pub.HPCToDDIJob"
+	hpcToDDIJobType                         = "org.lexis.common.ddi.nodes.HPCToDDIJob"
 	ddiRuntimeToCloudJobType                = "org.lexis.common.ddi.nodes.DDIRuntimeToCloudJob"
 	ddiRuntimeToHPCTaskJobType              = "org.lexis.common.ddi.nodes.DDIRuntimeToHPCTaskJob"
 	cloudToDDIJobType                       = "org.lexis.common.ddi.nodes.CloudToDDIJob"
-	waitForDDIDatasetJobType                = "org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob"
-	storeRunningHPCJobType                  = "org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob"
-	storeRunningHPCJobGroupByDatasetType    = "org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIGroupByDatasetJob"
+	waitForDDIDatasetJobType                = "org.lexis.common.ddi.nodes.WaitForDDIDatasetJob"
+	storeRunningHPCJobType                  = "org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIJob"
+	storeRunningHPCJobGroupByDatasetType    = "org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIGroupByDatasetJob"
 	deleteCloudDataJobType                  = "org.lexis.common.ddi.nodes.DeleteCloudDataJob"
 	getDDIDatasetInfoJobType                = "org.lexis.common.ddi.nodes.GetDDIDatasetInfoJob"
+	sshfsMountStagingAreaDataset            = "org.lexis.common.ddi.nodes.SSHFSMountStagingAreaDataset"
 )
 
 // Execution is the interface holding functions to execute an operation
@@ -86,6 +87,13 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	if monitoringTimeInterval <= 0 {
 		// Default value
 		monitoringTimeInterval = locationDefaultMonitoringTimeInterval
+	}
+
+	// Defining a long monitoring internal for very long jobs, that will override
+	// the monitoring time interval
+	longMonitoringTimeInterval := time.Minute
+	if longMonitoringTimeInterval < monitoringTimeInterval {
+		longMonitoringTimeInterval = monitoringTimeInterval
 	}
 
 	isDDIAccessComponent, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, ddiAccessComponentType)
@@ -192,6 +200,9 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		if err != nil {
 			return exec, errors.Wrapf(err, "Failed to exchange token for orchestrator")
 		}
+
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, deploymentID).Registerf(
+			fmt.Sprintf("Token exchanged for an orchestrator client access/refresh token for node %s", nodeName))
 
 		// Store these values
 		err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
@@ -431,11 +442,11 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		return exec, exec.ResolveExecution(ctx)
 	}
 
-	isStoreRunningHPCJobGroupByDatasetType, err := deployments.IsNodeDerivedFrom(
-		ctx, deploymentID, nodeName, storeRunningHPCJobGroupByDatasetType)
+	nodeType, err := deployments.GetNodeType(ctx, deploymentID, nodeName)
 	if err != nil {
 		return exec, err
 	}
+	isStoreRunningHPCJobGroupByDatasetType := (nodeType == storeRunningHPCJobGroupByDatasetType)
 	if isStoreRunningHPCJobGroupByDatasetType {
 		exec = &job.StoreRunningHPCJobFilesGroupByDataset{
 			DDIExecution: &common.DDIExecution{
@@ -446,7 +457,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				NodeName:     nodeName,
 				Operation:    operation,
 			},
-			MonitoringTimeInterval: monitoringTimeInterval,
+			MonitoringTimeInterval: longMonitoringTimeInterval,
 		}
 
 		return exec, exec.ResolveExecution(ctx)
@@ -466,7 +477,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				NodeName:     nodeName,
 				Operation:    operation,
 			},
-			MonitoringTimeInterval: monitoringTimeInterval,
+			MonitoringTimeInterval: longMonitoringTimeInterval,
 		}
 
 		return exec, exec.ResolveExecution(ctx)
@@ -513,6 +524,25 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				},
 				ActionType:             job.DisableCloudAccessAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
+			},
+		}
+		return exec, exec.ResolveExecution(ctx)
+	}
+
+	isSshfsMountStagingAreaDataset, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, sshfsMountStagingAreaDataset)
+	if err != nil {
+		return exec, err
+	}
+
+	if isSshfsMountStagingAreaDataset {
+		exec = &standard.SSHFSMountStagingAreaDataset{
+			DDIExecution: &common.DDIExecution{
+				KV:           kv,
+				Cfg:          cfg,
+				DeploymentID: deploymentID,
+				TaskID:       taskID,
+				NodeName:     nodeName,
+				Operation:    operation,
 			},
 		}
 		return exec, exec.ResolveExecution(ctx)

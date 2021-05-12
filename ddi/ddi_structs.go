@@ -44,6 +44,8 @@ type DataTransferRequest struct {
 	SourcePath   string   `json:"source_path"`
 	TargetSystem string   `json:"target_system"`
 	TargetPath   string   `json:"target_path,omitempty"`
+	Encryption   string   `json:"encryption"`
+	Compression  string   `json:"compression"`
 }
 
 // DataTransferRequestHPCExtension holds additional parameters for data transfers on HPC

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -140,6 +141,14 @@ func (e *DDIExecution) GetValueFromEnvInputs(envVar string) string {
 	}
 	return result
 
+}
+
+// GetBooleanValueFromEnvInputs returns a boolean from environment variables provided in input
+func (e *DDIExecution) GetBooleanValueFromEnvInputs(envVar string) bool {
+
+	val := e.GetValueFromEnvInputs(envVar)
+	res, _ := strconv.ParseBool(val)
+	return res
 }
 
 // GetDDILocationNameFromComputeLocationName gets the DDI location name
@@ -551,7 +560,7 @@ func (e *DDIExecution) GetDDILocationFromComputeLocation(ctx context.Context,
 }
 
 // GetAAIClient returns the AAI client for a given location
-func GetAAIClient(locationProps config.DynamicMap) yorcoidc.Client {
+func GetAAIClient(deploymentID string, locationProps config.DynamicMap) yorcoidc.Client {
 	url := locationProps.GetString(locationAAIURL)
 	clientID := locationProps.GetString(locationAAIClientID)
 	clientSecret := locationProps.GetString(locationAAIClientSecret)
@@ -576,6 +585,7 @@ func RefreshToken(ctx context.Context, locationProps config.DynamicMap, deployme
 	// Getting an AAI client to check token validity
 	accessToken, newRefreshToken, err := aaiClient.RefreshToken(ctx, refreshToken)
 	if err != nil {
+		log.Printf("ERROR %s attempting to refresh token %s\n", err.Error(), refreshToken)
 		return accessToken, newRefreshToken, errors.Wrapf(err, "Failed to refresh token for orchestrator")
 	}
 	// Store these values

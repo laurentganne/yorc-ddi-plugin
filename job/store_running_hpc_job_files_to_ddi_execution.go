@@ -87,6 +87,24 @@ func (e *StoreRunningHPCJobFilesToDDI) ExecuteAsync(ctx context.Context) (*prov.
 		}
 	}
 
+	// Get encryption/compression settings
+	encrypt := "no"
+	encryption, err := deployments.GetBooleanNodeProperty(ctx, e.DeploymentID, e.NodeName, encryptProperty)
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "Failed to get %s property for deployment %s node %s", encryptProperty, e.DeploymentID, e.NodeName)
+	}
+	if encryption {
+		encrypt = "yes"
+	}
+	compress := "no"
+	compression, err := deployments.GetBooleanNodeProperty(ctx, e.DeploymentID, e.NodeName, compressProperty)
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "Failed to get %s property for deployment %s node %s", compressProperty, e.DeploymentID, e.NodeName)
+	}
+	if compression {
+		compress = "yes"
+	}
+
 	// Dataset metadata
 	var metadata ddi.Metadata
 	var metadataStr string
@@ -114,6 +132,8 @@ func (e *StoreRunningHPCJobFilesToDDI) ExecuteAsync(ctx context.Context) (*prov.
 	data[actionDataTaskName] = taskName
 	data[actionDataMetadata] = metadataStr
 	data[actionDataOperation] = string(operationStr)
+	data[actionDataEncrypt] = encrypt
+	data[actionDataCompress] = compress
 
 	return &prov.Action{ActionType: StoreRunningHPCJobFilesToDDIAction, Data: data}, e.MonitoringTimeInterval, nil
 }

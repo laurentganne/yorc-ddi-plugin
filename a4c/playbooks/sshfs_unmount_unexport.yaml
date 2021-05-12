@@ -20,7 +20,7 @@
         method: DELETE
         validate_certs: no
         headers:
-          Authorization: "Bearer {{ TOKEN }}"
+          Authorization: "Bearer {{ ACCESS_TOKEN }}"
         body:
           user: "{{ SSHFS_USER }}"
           path: "{{ STAGING_AREA_ROOT_DIRECTORY }}"

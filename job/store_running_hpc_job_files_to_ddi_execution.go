@@ -188,7 +188,7 @@ func (e *StoreRunningHPCJobFilesToDDI) Execute(ctx context.Context) error {
 			}
 		}
 
-		token, err := common.GetAccessToken(ctx, e.DeploymentID, e.NodeName)
+		token, err := e.AAIClient.GetAccessToken()
 		if err != nil {
 			return err
 		}

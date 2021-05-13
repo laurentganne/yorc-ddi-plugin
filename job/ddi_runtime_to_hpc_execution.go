@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/laurentganne/yorc-ddi-plugin/common"
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/deployments"
@@ -201,7 +200,7 @@ func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context
 		return err
 	}
 
-	token, err := common.GetAccessToken(ctx, e.DeploymentID, e.NodeName)
+	token, err := e.AAIClient.GetAccessToken()
 	if err != nil {
 		return err
 	}

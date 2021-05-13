@@ -54,7 +54,7 @@ func (r *RefreshTargetTokens) Execute(ctx context.Context) error {
 		} else {
 			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, r.DeploymentID).Registerf(
 				"Refreshing tokens for target of %s: %s", r.NodeName, targetNodeName)
-			_, _, err = common.RefreshToken(ctx, locationProps, r.DeploymentID, targetNodeName, "")
+			_, _, err = common.RefreshToken(ctx, locationProps, r.DeploymentID)
 		}
 	case "install", "uninstall", "standard.create", "standard.stop", "standard.delete":
 		// Nothing to do here

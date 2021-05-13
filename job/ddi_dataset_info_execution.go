@@ -18,7 +18,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/laurentganne/yorc-ddi-plugin/common"
 	"github.com/laurentganne/yorc-ddi-plugin/ddi"
 	"github.com/pkg/errors"
 
@@ -93,7 +92,7 @@ func (e *DDIDatasetInfoExecution) submitDatasetInfoRequest(ctx context.Context) 
 		return errors.Errorf("Found no DDI area having dataset path %s", datasetPath)
 	}
 
-	token, err := common.GetAccessToken(ctx, e.DeploymentID, e.NodeName)
+	token, err := e.AAIClient.GetAccessToken()
 	if err != nil {
 		return err
 	}
@@ -128,7 +127,7 @@ func (e *DDIDatasetInfoExecution) getAreasForDDIDataset(ctx context.Context, ddi
 		return ddiAreas, err
 	}
 	// Get the access token
-	token, err := common.GetAccessToken(ctx, e.DeploymentID, e.NodeName)
+	token, err := e.AAIClient.GetAccessToken()
 	if err != nil {
 		return ddiAreas, err
 	}

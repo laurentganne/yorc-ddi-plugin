@@ -193,7 +193,7 @@ func (o *ActionOperator) monitorJob(ctx context.Context, cfg config.Configuratio
 		return true, err
 	}
 
-	token, err := common.GetAccessToken(ctx, deploymentID, actionData.nodeName)
+	token, err := common.GetAccessToken(ctx, cfg, deploymentID, actionData.nodeName)
 	if err != nil {
 		return true, err
 	}
@@ -383,7 +383,7 @@ func (o *ActionOperator) monitorDataset(ctx context.Context, cfg config.Configur
 		return true, errors.Errorf("Unsupported action %s", action.ActionType)
 	}
 
-	token, err := common.GetAccessToken(ctx, deploymentID, actionData.nodeName)
+	token, err := common.GetAccessToken(ctx, cfg, deploymentID, actionData.nodeName)
 	if err != nil {
 		return true, err
 	}
@@ -845,7 +845,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 		return true, errors.Errorf("Failed to get HEAppE URL of job %d", heappeJobID)
 	}
 
-	token, err := common.GetAccessToken(ctx, deploymentID, actionData.nodeName)
+	token, err := common.GetAccessToken(ctx, cfg, deploymentID, actionData.nodeName)
 	if err != nil {
 		return true, err
 	}

@@ -78,7 +78,7 @@ func (e *HPCDatasetInfoExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-// setHPCJobTaskDatasetInfo coputes and sets a JOb Task dataset info
+// setHPCJobTaskDatasetInfo computes and sets a Job Task dataset info
 func (e *HPCDatasetInfoExecution) setHPCJobTaskDatasetInfo(ctx context.Context) error {
 	changedFiles, err := e.GetHPCJobChangedFilesSinceStartup(ctx)
 	if err != nil {
@@ -87,7 +87,7 @@ func (e *HPCDatasetInfoExecution) setHPCJobTaskDatasetInfo(ctx context.Context) 
 
 	numberOfFiles := len(changedFiles)
 	numberOFfFilesStr := strconv.Itoa(1000 * numberOfFiles)
-	// Arbitrary size until HEAppE returns the sizr of each file
+	// Arbitrary size until HEAppE returns the size of each file
 	err = e.SetDatasetInfoCapabilitySizeAttribute(ctx, strconv.Itoa(1000*numberOfFiles))
 	if err != nil {
 		return err

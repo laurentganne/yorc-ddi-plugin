@@ -23,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/ystia/yorc/v4/config"
+	"github.com/ystia/yorc/v4/deployments"
 	"github.com/ystia/yorc/v4/events"
 	"github.com/ystia/yorc/v4/prov"
 	"github.com/ystia/yorc/v4/tosca"
@@ -51,7 +52,14 @@ func (s *SSHFSMountStagingAreaDataset) Execute(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		_, _, err = common.RefreshToken(ctx, locationProps, s.DeploymentID, s.NodeName, "")
+		var accessToken string
+		accessToken, _, err = common.RefreshToken(ctx, locationProps, s.DeploymentID)
+		if err != nil {
+			return err
+		}
+		// The start operation expects to find the access token in the component attributes
+		err = deployments.SetAttributeForAllInstances(ctx, s.DeploymentID, s.NodeName,
+			"access_token", accessToken)
 
 	case "standard.create", "standard.start", "standard.stop":
 		err = errors.Errorf("Unsupported operation %s in plugin as it is implemented in an Ansible playbook", s.Operation.Name)

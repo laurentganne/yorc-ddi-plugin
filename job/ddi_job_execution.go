@@ -198,7 +198,7 @@ func getDDIClient(ctx context.Context, cfg config.Configuration, deploymentID, n
 	}
 
 	var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
-		accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID, nodeName, "")
+		accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID)
 		return accessToken, err
 	}
 
@@ -226,7 +226,7 @@ func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deployment
 			return ddiClient, locationName, err
 		}
 		var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
-			accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID, nodeName, "")
+			accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID)
 			return accessToken, err
 		}
 		// Check if the corresponding DDI client is alive
@@ -255,7 +255,7 @@ func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deployment
 				return ddiClient, locationName, err
 			}
 			var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
-				accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID, nodeName, "")
+				accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID)
 				return accessToken, err
 			}
 			ddiClient, err = ddi.GetClient(locationProps, refreshTokenFunc)

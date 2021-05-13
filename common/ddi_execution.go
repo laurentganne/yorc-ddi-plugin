@@ -55,9 +55,7 @@ const (
 	// DatasetInfoLocations is an attribute providing the size in bytes of a dataset
 	DatasetInfoSize = "size"
 	// AccessTokenConsulAttribute is the access token attribute of a job stored in consul
-	AccessTokenConsulAttribute = "access_token"
-	// RefreshTokenConsulAttribute is the refresh token attribute of a job stored in consul
-	RefreshTokenConsulAttribute              = "refresh_token"
+	AccessTokenConsulAttribute               = "access_token"
 	locationAAIURL                           = "aai_url"
 	locationAAIClientID                      = "aai_client_id"
 	locationAAIClientSecret                  = "aai_client_secret"
@@ -90,6 +88,7 @@ type DDIExecution struct {
 	Operation      prov.Operation
 	EnvInputs      []*operations.EnvInput
 	VarInputsNames []string
+	AAIClient      yorcoidc.Client
 }
 
 // GetStoredNodeTemplate returns the description of a node stored by Yorc
@@ -523,7 +522,7 @@ func (e *DDIExecution) GetDDIClientFromRequirement(ctx context.Context, requirem
 	}
 
 	var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
-		accessToken, _, err := RefreshToken(ctx, locationProps, e.DeploymentID, e.NodeName, "")
+		accessToken, _, err := RefreshToken(ctx, locationProps, e.DeploymentID)
 		return accessToken, err
 	}
 	ddiClient, err := ddi.GetClient(locationProps, refreshTokenFunc)
@@ -559,60 +558,44 @@ func (e *DDIExecution) GetDDILocationFromComputeLocation(ctx context.Context,
 
 }
 
+// GetAccessToken returns the access token for this dpeloyment
+func GetAccessToken(ctx context.Context, cfg config.Configuration, deploymentID, nodeName string) (string, error) {
+	locationMgr, err := locations.GetManager(cfg)
+	if err != nil {
+		return "", err
+	}
+	locationProps, err := locationMgr.GetLocationPropertiesForNode(ctx,
+		deploymentID, nodeName, DDIInfrastructureType)
+	if err != nil {
+		return "", err
+	}
+
+	aaiClient := GetAAIClient(deploymentID, locationProps)
+
+	return aaiClient.GetAccessToken()
+
+}
+
 // GetAAIClient returns the AAI client for a given location
 func GetAAIClient(deploymentID string, locationProps config.DynamicMap) yorcoidc.Client {
 	url := locationProps.GetString(locationAAIURL)
 	clientID := locationProps.GetString(locationAAIClientID)
 	clientSecret := locationProps.GetString(locationAAIClientSecret)
 	realm := locationProps.GetString(locationAAIRealm)
-	return yorcoidc.GetClient(url, clientID, clientSecret, realm)
+	return yorcoidc.GetClient(deploymentID, url, clientID, clientSecret, realm)
 }
 
 // RefreshToken refreshes an access token
-func RefreshToken(ctx context.Context, locationProps config.DynamicMap, deploymentID, nodeName, refreshToken string) (string, string, error) {
+func RefreshToken(ctx context.Context, locationProps config.DynamicMap, deploymentID string) (string, string, error) {
 
-	if refreshToken == "" {
-		val, err := deployments.GetInstanceAttributeValue(ctx, deploymentID, nodeName, "0", RefreshTokenConsulAttribute)
-		if err != nil {
-			return "", "", err
-		}
-		if val != nil {
-			refreshToken = val.RawString()
-		}
-	}
-
-	aaiClient := GetAAIClient(locationProps)
+	aaiClient := GetAAIClient(deploymentID, locationProps)
 	// Getting an AAI client to check token validity
-	accessToken, newRefreshToken, err := aaiClient.RefreshToken(ctx, refreshToken)
+	accessToken, newRefreshToken, err := aaiClient.RefreshToken(ctx)
 	if err != nil {
+		refreshToken, _ := aaiClient.GetRefreshToken()
 		log.Printf("ERROR %s attempting to refresh token %s\n", err.Error(), refreshToken)
 		return accessToken, newRefreshToken, errors.Wrapf(err, "Failed to refresh token for orchestrator")
 	}
-	// Store these values
-	err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
-		AccessTokenConsulAttribute, accessToken)
-	if err != nil {
-		return accessToken, newRefreshToken, errors.Wrapf(err, "Job %s, failed to store access token", nodeName)
-	}
-	err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
-		RefreshTokenConsulAttribute, newRefreshToken)
-	if err != nil {
-		return accessToken, newRefreshToken, errors.Wrapf(err, "Node %s, failed to store refresh token", nodeName)
-	}
 
 	return accessToken, newRefreshToken, err
-
-}
-
-// GetAccessToken gets the access token attibute of a TOSCA component
-func GetAccessToken(ctx context.Context, deploymentID, nodeName string) (string, error) {
-	var accessToken string
-	val, err := deployments.GetInstanceAttributeValue(ctx, deploymentID, nodeName, "0", AccessTokenConsulAttribute)
-	if err != nil {
-		return accessToken, err
-	}
-	if val != nil {
-		accessToken = val.RawString()
-	}
-	return accessToken, err
 }

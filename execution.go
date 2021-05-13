@@ -33,7 +33,6 @@ import (
 )
 
 const (
-	ddiInfrastructureType                   = "ddi"
 	locationJobMonitoringTimeInterval       = "job_monitoring_time_interval"
 	locationDefaultMonitoringTimeInterval   = 5 * time.Second
 	ddiAccessComponentType                  = "org.lexis.common.ddi.nodes.DDIAccess"
@@ -78,7 +77,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		return nil, err
 	}
 	locationProps, err := locationMgr.GetLocationPropertiesForNode(ctx,
-		deploymentID, nodeName, ddiInfrastructureType)
+		deploymentID, nodeName, common.DDIInfrastructureType)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +95,9 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		longMonitoringTimeInterval = monitoringTimeInterval
 	}
 
+	// Getting an AAI client to manage tokens
+	aaiClient := common.GetAAIClient(deploymentID, locationProps)
+
 	isDDIAccessComponent, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, ddiAccessComponentType)
 	if err != nil {
 		return exec, err
@@ -110,6 +112,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				TaskID:       taskID,
 				NodeName:     nodeName,
 				Operation:    operation,
+				AAIClient:    aaiClient,
 			},
 		}
 		return exec, exec.ResolveExecution(ctx)
@@ -129,6 +132,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				TaskID:       taskID,
 				NodeName:     nodeName,
 				Operation:    operation,
+				AAIClient:    aaiClient,
 			},
 		}
 		return exec, exec.ResolveExecution(ctx)
@@ -148,6 +152,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				TaskID:       taskID,
 				NodeName:     nodeName,
 				Operation:    operation,
+				AAIClient:    aaiClient,
 			},
 		}
 		return exec, exec.ResolveExecution(ctx)
@@ -162,16 +167,9 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		return exec, errors.Errorf("Found no instance for node %s in deployment %s", nodeName, deploymentID)
 	}
 
-	// Getting an AAI client to check token validity
-	aaiClient := common.GetAAIClient(locationProps)
-
-	var accessToken, refreshToken string
-	val, err := deployments.GetInstanceAttributeValue(ctx, deploymentID, nodeName, ids[0], common.AccessTokenConsulAttribute)
+	accessToken, err := aaiClient.GetAccessToken()
 	if err != nil {
 		return nil, err
-	}
-	if val != nil {
-		accessToken = val.RawString()
 	}
 
 	if accessToken == "" {
@@ -196,7 +194,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 			return exec, errors.Errorf(errorMsg)
 		}
 		// Exchange this token for an access and a refresh token for the orchestrator
-		accessToken, refreshToken, err = aaiClient.ExchangeToken(ctx, token)
+		accessToken, _, err = aaiClient.ExchangeToken(ctx, token)
 		if err != nil {
 			return exec, errors.Wrapf(err, "Failed to exchange token for orchestrator")
 		}
@@ -204,26 +202,6 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, deploymentID).Registerf(
 			fmt.Sprintf("Token exchanged for an orchestrator client access/refresh token for node %s", nodeName))
 
-		// Store these values
-		err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
-			common.AccessTokenConsulAttribute, accessToken)
-		if err != nil {
-			return exec, errors.Wrapf(err, "Job %s, failed to store access token", nodeName)
-		}
-		err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
-			common.RefreshTokenConsulAttribute, refreshToken)
-		if err != nil {
-			return exec, errors.Wrapf(err, "Job %s, failed to store refresh token", nodeName)
-		}
-
-	} else {
-		val, err = deployments.GetInstanceAttributeValue(ctx, deploymentID, nodeName, ids[0], common.RefreshTokenConsulAttribute)
-		if err != nil {
-			return exec, err
-		}
-		if val != nil {
-			refreshToken = val.RawString()
-		}
 	}
 
 	// Checking the access token validity
@@ -233,7 +211,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	}
 
 	if !valid {
-		_, _, err = common.RefreshToken(ctx, locationProps, deploymentID, nodeName, refreshToken)
+		accessToken, _, err = aaiClient.RefreshToken(ctx)
 		if err != nil {
 			return exec, errors.Wrapf(err, "Failed to refresh token for orchestrator")
 		}
@@ -253,6 +231,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					TaskID:       taskID,
 					NodeName:     nodeName,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.GetDDIDatasetInfoAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -276,6 +255,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					TaskID:       taskID,
 					NodeName:     nodeName,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.CloudDataDeleteAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -298,6 +278,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					TaskID:       taskID,
 					NodeName:     nodeName,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -321,6 +302,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					TaskID:       taskID,
 					NodeName:     nodeName,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -344,6 +326,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					TaskID:       taskID,
 					NodeName:     nodeName,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -367,6 +350,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					TaskID:       taskID,
 					NodeName:     nodeName,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -390,6 +374,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					TaskID:       taskID,
 					NodeName:     nodeName,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -413,6 +398,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					TaskID:       taskID,
 					NodeName:     nodeName,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -435,6 +421,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				TaskID:       taskID,
 				NodeName:     nodeName,
 				Operation:    operation,
+				AAIClient:    aaiClient,
 			},
 			MonitoringTimeInterval: monitoringTimeInterval,
 		}
@@ -456,6 +443,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				TaskID:       taskID,
 				NodeName:     nodeName,
 				Operation:    operation,
+				AAIClient:    aaiClient,
 			},
 			MonitoringTimeInterval: longMonitoringTimeInterval,
 		}
@@ -476,6 +464,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				TaskID:       taskID,
 				NodeName:     nodeName,
 				Operation:    operation,
+				AAIClient:    aaiClient,
 			},
 			MonitoringTimeInterval: longMonitoringTimeInterval,
 		}
@@ -498,6 +487,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					TaskID:       taskID,
 					NodeName:     nodeName,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.EnableCloudAccessAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -521,6 +511,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					TaskID:       taskID,
 					NodeName:     nodeName,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DisableCloudAccessAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -543,8 +534,16 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				TaskID:       taskID,
 				NodeName:     nodeName,
 				Operation:    operation,
+				AAIClient:    aaiClient,
 			},
 		}
+		// The start operation expects to find the access token in the component attributes
+		err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
+			"access_token", accessToken)
+		if err != nil {
+			return exec, err
+		}
+
 		return exec, exec.ResolveExecution(ctx)
 	}
 

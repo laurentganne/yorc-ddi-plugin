@@ -46,6 +46,10 @@ func (e *HPCDatasetInfoExecution) Execute(ctx context.Context) error {
 	case "install", "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating %q", e.NodeName)
+		// Nothing to do
+	case "standard.start":
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Starting %q", e.NodeName)
 		locationName, err := e.SetLocationFromAssociatedHPCJob(ctx)
 		if err != nil {
 			return err
@@ -57,9 +61,6 @@ func (e *HPCDatasetInfoExecution) Execute(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-	case "standard.start":
-		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
-			"Starting %q", e.NodeName)
 		return e.setHPCJobTaskDatasetInfo(ctx)
 	case "uninstall", "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(

@@ -127,6 +127,10 @@ func (e *CloudToDDIJobExecution) submitDataTransferRequest(ctx context.Context) 
 		compress = "yes"
 	}
 
+	events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+		"Submitting data transfer request for %s source %s path %s, destination %s path %s, encrypt %s, compress %s",
+		e.NodeName, ddiClient.GetCloudStagingAreaName(), sourcePath, ddiClient.GetDDIAreaName(), destPath, encrypt, compress)
+
 	requestID, err := ddiClient.SubmitCloudToDDIDataTransfer(metadata, token, sourcePath, destPath, encrypt, compress)
 	if err != nil {
 		return err

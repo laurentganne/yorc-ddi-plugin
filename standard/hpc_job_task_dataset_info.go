@@ -16,6 +16,7 @@ package standard
 
 import (
 	"context"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -53,6 +54,12 @@ func (e *HPCDatasetInfoExecution) Execute(ctx context.Context) error {
 		locationName, err := e.SetLocationFromAssociatedHPCJob(ctx)
 		if err != nil {
 			return err
+		}
+
+		if locationName == "" {
+			// TODO: remove this hard-coded value
+			log.Printf("TODO remove hard-coded HPCDatasetInfo location ")
+			locationName = "it4i_heappe"
 		}
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Location for %s is %s", e.NodeName, locationName)

@@ -267,13 +267,17 @@ func (e *DDIExecution) setLocationFromAssociatedTarget(ctx context.Context, targ
 		return locationName, err
 	}
 
+	log.Printf("DEBUG got location for target associated to %s with cap %s\n", e.NodeName, targetCapability)
 	// Get the associated target node name if any
 	var targetNodeName string
 	for _, nodeReq := range nodeTemplate.Requirements {
 		for _, reqAssignment := range nodeReq {
 			if reqAssignment.Capability == targetCapability {
+				log.Printf("DEBUG found target %s associated to %s\n", reqAssignment.Node, e.NodeName)
 				targetNodeName = reqAssignment.Node
 				break
+			} else {
+				log.Printf("DEBUG not target %s associated to %s through %s\n", reqAssignment.Node, e.NodeName, reqAssignment.Capability)
 			}
 		}
 	}
@@ -288,6 +292,7 @@ func (e *DDIExecution) setLocationFromAssociatedTarget(ctx context.Context, targ
 	}
 	var targetLocationName string
 	if targetNodeTemplate.Metadata != nil {
+		log.Printf("DEBUG target node %s metadata : %+v\n", targetNodeName, targetNodeTemplate.Metadata)
 		targetLocationName = targetNodeTemplate.Metadata[tosca.MetadataLocationNameKey]
 	}
 	if targetLocationName == "" {

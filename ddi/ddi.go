@@ -174,7 +174,6 @@ func (d *ddiClient) IsAlive() bool {
 	}
 	response.Body.Close()
 	log.Debugf("DDI client isAlive(): request to %s returned status %d\n", d.StagingURL, response.StatusCode)
-
 	return response.StatusCode == 200 || response.StatusCode == 301 || response.StatusCode == 302
 }
 
@@ -495,12 +494,12 @@ func (d *ddiClient) GetReplicationStatus(token, targetSystem, targetPath string)
 		if err != nil {
 			err = errors.Wrapf(err, "Failed to submit replication status request for system %s path %s", targetSystem, targetPath)
 			if strings.Contains(err.Error(), "500 Internal Server Error") {
-				log.Printf("Attempt %d of submit replication status request for %s %s failed on error 500 Internal server error\n",
-					i, targetSystem, targetPath)
+				log.Printf("Attempt %d of submit replication status request to %s%s for %q %q failed on error 500 Internal server error\n",
+					i, d.httpStagingClient.baseURL, ddiStagingReplicationStatusREST, targetSystem, targetPath)
 			} else {
 				break
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(5 * time.Second)
 		}
 	}
 

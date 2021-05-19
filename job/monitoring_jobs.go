@@ -617,7 +617,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	default:
 		jobDone = false
 	}
-	log.Printf("LOLO job status %s\n", jobState)
+	log.Printf("DEBUG job status %s\n", jobState)
 	ddiClient, err := getDDIClient(ctx, cfg, deploymentID, actionData.nodeName)
 	if err != nil {
 		return true, err
@@ -645,7 +645,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	var toBeStoredFiles map[string]ToBeStoredFileInfo
 	val, err = deployments.GetInstanceAttributeValue(ctx, deploymentID, actionData.nodeName, "0", toBeStoredFilesConsulAttribute)
 	if err != nil {
-		log.Printf("LOLO deployments.GetInstanceAttributeValue %s %s returns %+v\n", deploymentID, actionData, err)
+		log.Printf("DEBUG deployments.GetInstanceAttributeValue %s %s returns %+v\n", deploymentID, actionData, err)
 	}
 	if err == nil && val != nil && val.RawString() != "" {
 		err = json.Unmarshal([]byte(val.RawString()), &toBeStoredFiles)
@@ -654,10 +654,10 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 			return true, err
 		}
 	} else {
-		log.Printf("LOLO deployments.GetInstanceAttributeValue %s %s returns no value\n", deploymentID, actionData)
+		log.Printf("DEBUG deployments.GetInstanceAttributeValue %s %s returns no value\n", deploymentID, actionData)
 	}
 
-	log.Printf("LOLO consul for %s has toBeStoredFiles %+v\n", actionData.nodeName, toBeStoredFiles)
+	log.Printf("DEBUG consul for %s has toBeStoredFiles %+v\n", actionData.nodeName, toBeStoredFiles)
 
 	// The task ID has to be added as prefix to file patterns if a task name was specified
 	strVal := o.getValueFromEnv(tasksNameIdEnvVar, envInputs)
@@ -766,7 +766,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	}
 
 	log.Debugf("new files updates: %+v\n", newFilesUpdates)
-	log.Printf("LOLO new files updates: %+v\n", newFilesUpdates)
+	log.Printf("DEBUG new files updates: %+v\n", newFilesUpdates)
 
 	// Update the maps of files to be stored
 	toBeStoredUpdated := make(map[string]ToBeStoredFileInfo)
@@ -787,7 +787,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 				// Checking if the time to wait for its storage has elapse
 				insertTime, _ := time.Parse(time.RFC3339, toBeStoredFile.CandidateToStorageDate)
 				duration := currentTime.Sub(insertTime)
-				log.Printf("LOLO duration %s expecting %s\ncurrent time %s insert time %s\n",
+				log.Printf("DEBUG duration %s expecting %s\ncurrent time %s insert time %s\n",
 					duration.String(), elapsedDuration.String(), currentTime.String(), insertTime.String())
 				if duration >= elapsedDuration {
 					log.Printf("New file to store: %s\n", changedFile.FileName)
@@ -797,7 +797,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 				}
 			}
 		} else {
-			log.Printf("LOLO new file changed: %s date %s\n", changedFile.FileName, changedFile.LastModifiedDate)
+			log.Printf("DEBUG new file changed: %s date %s\n", changedFile.FileName, changedFile.LastModifiedDate)
 			toBeStoredUpdated[changedFile.FileName] = ToBeStoredFileInfo{
 				GroupIdentifier:        changedFile.GroupIdentifier,
 				LastModifiedDate:       changedFile.LastModifiedDate,
@@ -807,7 +807,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	}
 
 	log.Debugf("Files to be stored updated: %+v\n", toBeStoredUpdated)
-	log.Printf("LOLO Files to be stored updated: %+v\n", toBeStoredUpdated)
+	log.Printf("DEBUG Files to be stored updated: %+v\n", toBeStoredUpdated)
 
 	// Save the new to be stored values
 	err = deployments.SetAttributeComplexForAllInstances(ctx, deploymentID, actionData.nodeName,
@@ -904,7 +904,7 @@ func (o *ActionOperator) monitorRunningHPCJob(ctx context.Context, cfg config.Co
 	}
 
 	log.Debugf("Files stored updated: %+v\n", storedFiles)
-	log.Printf("LOLO Files stored updated: %+v\n", storedFiles)
+	log.Printf("DEBUG Files stored updated: %+v\n", storedFiles)
 
 	// Replicate completed datasets
 	replicating, replicationDone, err := o.updateReplicationStatus(

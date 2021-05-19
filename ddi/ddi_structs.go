@@ -43,19 +43,22 @@ type DataTransferRequest struct {
 	SourceSystem string   `json:"source_system"`
 	SourcePath   string   `json:"source_path"`
 	TargetSystem string   `json:"target_system"`
-	TargetPath   string   `json:"target_path"`
+	TargetPath   string   `json:"target_path,omitempty"`
+	Encryption   string   `json:"encryption"`
+	Compression  string   `json:"compression"`
 }
 
-// DataTransferRequestHPCExectension holds additional parameters for data transfers on HPC
-type DataTransferRequestHPCExectension struct {
-	JobID  int64 `json:"job_id"`
-	TaskID int64 `json:"task_id,omitempty"`
+// DataTransferRequestHPCExtension holds additional parameters for data transfers on HPC
+type DataTransferRequestHPCExtension struct {
+	HEAppEURL string `json:"heappe_url"`
+	JobID     int64  `json:"job_id"`
+	TaskID    int64  `json:"task_id,omitempty"`
 }
 
 // HPCDataTransferRequest holds parameters of a data transfer request
 type HPCDataTransferRequest struct {
 	DataTransferRequest
-	DataTransferRequestHPCExectension
+	DataTransferRequestHPCExtension
 }
 
 // DeleteDataRequest holds parameters of data to delete
@@ -73,6 +76,7 @@ type SubmittedRequestInfo struct {
 type RequestStatus struct {
 	Status     string `json:"status"`
 	TargetPath string `json:"target_path,omitempty"`
+	PID        string `json:"PID,omitempty"`
 }
 
 // DatasetLocation holds location properties of a dataset

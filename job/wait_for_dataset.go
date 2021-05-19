@@ -76,7 +76,6 @@ func (e *WaitForDataset) ExecuteAsync(ctx context.Context) (*prov.Action, time.D
 	data := make(map[string]string)
 	data[actionDataTaskID] = e.TaskID
 	data[actionDataNodeName] = e.NodeName
-	data[actionDataToken] = e.Token
 	data[actionDataMetadata] = metadataStr
 	data[actionDataFilesPatterns] = filesPatternsStr
 

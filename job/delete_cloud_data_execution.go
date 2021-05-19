@@ -100,7 +100,12 @@ func (e *DeleteCloudDataExecution) SubmitCloudStagingAreaDataDeletion(ctx contex
 	}
 	log.Printf("Submitting deletion of %s", dataPath)
 
-	requestID, err := ddiClient.SubmitCloudStagingAreaDataDeletion(e.Token, dataPath)
+	token, err := e.AAIClient.GetAccessToken()
+	if err != nil {
+		return err
+	}
+
+	requestID, err := ddiClient.SubmitCloudStagingAreaDataDeletion(token, dataPath)
 	if err != nil {
 		return err
 	}

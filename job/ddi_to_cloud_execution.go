@@ -110,7 +110,26 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToCloudDataTransfer(metadata, e.Token, sourcePath, destPath)
+	token, err := e.AAIClient.GetAccessToken()
+	if err != nil {
+		return err
+	}
+
+	// Check encryption/compression settings
+	decrypt := "no"
+	if e.GetBooleanValueFromEnvInputs(decryptEnvVar) {
+		decrypt = "yes"
+	}
+	uncompress := "no"
+	if e.GetBooleanValueFromEnvInputs(uncompressEnvVar) {
+		uncompress = "yes"
+	}
+
+	events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+		"Submitting data transfer request for %s source %s path %s, destination %s path %s, decrypt %s, uncompress %s",
+		e.NodeName, ddiClient.GetDDIAreaName(), sourcePath, ddiClient.GetCloudStagingAreaName(), destPath, decrypt, uncompress)
+
+	requestID, err := ddiClient.SubmitDDIToCloudDataTransfer(metadata, token, sourcePath, destPath, decrypt, uncompress)
 	if err != nil {
 		return err
 	}

@@ -162,6 +162,11 @@ func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context
 		return err
 	}
 
+	heappeURL := e.GetValueFromEnvInputs(heappeURLEnvVar)
+	if heappeURL == "" {
+		return errors.Errorf("Failed to get HEAppE URL of job %d", heappeJobID)
+	}
+
 	taskName := e.GetValueFromEnvInputs(taskNameEnvVar)
 	if taskName == "" {
 		return errors.Errorf("Failed to get task name")
@@ -195,7 +200,27 @@ func (e *DDIRuntimeToHPCExecution) submitDataTransferRequest(ctx context.Context
 		return err
 	}
 
-	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, e.Token, sourcePath, targetSystem, taskDirPath, heappeJobID, taskID)
+	token, err := e.AAIClient.GetAccessToken()
+	if err != nil {
+		return err
+	}
+
+	// Check encryption/compression settings
+	decrypt := "no"
+	if e.GetBooleanValueFromEnvInputs(decryptEnvVar) {
+		decrypt = "yes"
+	}
+	uncompress := "no"
+	if e.GetBooleanValueFromEnvInputs(uncompressEnvVar) {
+		uncompress = "yes"
+	}
+
+	events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+		"Submitting data transfer request for %s source %s path %s, destination %s path %s, decrypt %s, uncompress %s, URL %s, job %d, task %d",
+		e.NodeName, ddiClient.GetDDIAreaName(), sourcePath, targetSystem, taskDirPath, decrypt, uncompress, heappeURL, heappeJobID, taskID)
+
+	requestID, err := ddiClient.SubmitDDIToHPCDataTransfer(metadata, token, sourcePath, targetSystem, taskDirPath,
+		decrypt, uncompress, heappeURL, heappeJobID, taskID)
 	if err != nil {
 		return err
 	}

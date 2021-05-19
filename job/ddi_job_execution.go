@@ -41,9 +41,14 @@ const (
 	elapsedTimeMinutesProperty            = "last_modification_elapsed_time_minutes"
 	projectProperty                       = "project"
 	taskNameProperty                      = "task_name"
+	groupFilesPatternProperty             = "group_files_pattern"
+	encryptProperty                       = "encrypt"
+	compressProperty                      = "compress"
+	replicationSitesProperty              = "replication_sites"
 	requestIDConsulAttribute              = "request_id"
 	destinationDatasetPathConsulAttribute = "destination_path"
 	storedFilesConsulAttribute            = "stored_files"
+	datasetReplicationConsulAttribute     = "dataset_replication"
 	toBeStoredFilesConsulAttribute        = "to_be_stored_files"
 	stagingAreaNameConsulAttribute        = "staging_area_name"
 	stagingAreaPathConsulAttribute        = "staging_area_directory_path"
@@ -58,9 +63,14 @@ const (
 	sourceFileNameEnvVar                  = "SOURCE_FILE_NAME"
 	cloudStagingAreaDatasetPathEnvVar     = "CLOUD_STAGING_AREA_DIRECTORY_PATH"
 	timestampCloudStagingAreaDirEnvVar    = "TIMESTAMP_CLOUD_STAGING_AREA_DIRECTORY"
+	encryptEnvVar                         = "ENCRYPT"
+	decryptEnvVar                         = "DECRYPT"
+	compressEnvVar                        = "COMPRESS"
+	uncompressEnvVar                      = "UNCOMPRESS"
 	hpcDirectoryPathEnvVar                = "HPC_DIRECTORY_PATH"
 	hpcServerEnvVar                       = "HPC_SERVER"
 	heappeJobIDEnvVar                     = "HEAPPE_JOB_ID"
+	heappeURLEnvVar                       = "HEAPPE_URL"
 	tasksNameIdEnvVar                     = "TASKS_NAME_ID"
 	taskNameEnvVar                        = "TASK_NAME"
 	ipAddressEnvVar                       = "IP_ADDRESS"
@@ -96,7 +106,6 @@ func (e *DDIJobExecution) ExecuteAsync(ctx context.Context) (*prov.Action, time.
 	data[actionDataTaskID] = e.TaskID
 	data[actionDataNodeName] = e.NodeName
 	data[actionDataRequestID] = requestID
-	data[actionDataToken] = e.Token
 
 	return &prov.Action{ActionType: e.ActionType, Data: data}, e.MonitoringTimeInterval, err
 }
@@ -188,7 +197,12 @@ func getDDIClient(ctx context.Context, cfg config.Configuration, deploymentID, n
 		return nil, err
 	}
 
-	return ddi.GetClient(locationProps)
+	var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
+		accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID)
+		return accessToken, err
+	}
+
+	return ddi.GetClient(locationProps, refreshTokenFunc)
 }
 
 func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deploymentID, nodeName string) (ddi.Client, string, error) {
@@ -207,12 +221,16 @@ func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deployment
 	}
 
 	if found {
-		// Check if the corresponding DDI client is alive
 		locationProps, err := locationMgr.GetLocationProperties(locationName, common.DDIInfrastructureType)
 		if err != nil {
 			return ddiClient, locationName, err
 		}
-		ddiClient, err = ddi.GetClient(locationProps)
+		var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
+			accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID)
+			return accessToken, err
+		}
+		// Check if the corresponding DDI client is alive
+		ddiClient, err = ddi.GetClient(locationProps, refreshTokenFunc)
 		if err != nil {
 			return ddiClient, locationName, err
 		}
@@ -236,7 +254,11 @@ func getDDIClientAlive(ctx context.Context, cfg config.Configuration, deployment
 			if err != nil {
 				return ddiClient, locationName, err
 			}
-			ddiClient, err = ddi.GetClient(locationProps)
+			var refreshTokenFunc ddi.RefreshTokenFunc = func() (string, error) {
+				accessToken, _, err := common.RefreshToken(ctx, locationProps, deploymentID)
+				return accessToken, err
+			}
+			ddiClient, err = ddi.GetClient(locationProps, refreshTokenFunc)
 			if err != nil {
 				return ddiClient, locationName, err
 			}

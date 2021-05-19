@@ -16,6 +16,7 @@ package standard
 
 import (
 	"context"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -46,9 +47,19 @@ func (e *HPCDatasetInfoExecution) Execute(ctx context.Context) error {
 	case "install", "standard.create":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Creating %q", e.NodeName)
+		// Nothing to do
+	case "standard.start":
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Starting %q", e.NodeName)
 		locationName, err := e.SetLocationFromAssociatedHPCJob(ctx)
 		if err != nil {
 			return err
+		}
+
+		if locationName == "" {
+			// TODO: remove this hard-coded value
+			log.Printf("TODO remove hard-coded HPCDatasetInfo location ")
+			locationName = "it4i_heappe"
 		}
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
 			"Location for %s is %s", e.NodeName, locationName)
@@ -57,9 +68,6 @@ func (e *HPCDatasetInfoExecution) Execute(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-	case "standard.start":
-		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
-			"Starting %q", e.NodeName)
 		return e.setHPCJobTaskDatasetInfo(ctx)
 	case "uninstall", "standard.delete":
 		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
@@ -78,7 +86,7 @@ func (e *HPCDatasetInfoExecution) Execute(ctx context.Context) error {
 	return err
 }
 
-// setHPCJobTaskDatasetInfo coputes and sets a JOb Task dataset info
+// setHPCJobTaskDatasetInfo computes and sets a Job Task dataset info
 func (e *HPCDatasetInfoExecution) setHPCJobTaskDatasetInfo(ctx context.Context) error {
 	changedFiles, err := e.GetHPCJobChangedFilesSinceStartup(ctx)
 	if err != nil {
@@ -87,7 +95,7 @@ func (e *HPCDatasetInfoExecution) setHPCJobTaskDatasetInfo(ctx context.Context) 
 
 	numberOfFiles := len(changedFiles)
 	numberOFfFilesStr := strconv.Itoa(1000 * numberOfFiles)
-	// Arbitrary size until HEAppE returns the sizr of each file
+	// Arbitrary size until HEAppE returns the size of each file
 	err = e.SetDatasetInfoCapabilitySizeAttribute(ctx, strconv.Itoa(1000*numberOfFiles))
 	if err != nil {
 		return err

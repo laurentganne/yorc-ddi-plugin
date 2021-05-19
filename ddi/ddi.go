@@ -32,8 +32,10 @@ const (
 	TaskStatusPendingMsg = "Task still in the queue, or task does not exist"
 	// TaskStatusInProgressMsg is the message returned when a task is in progress
 	TaskStatusInProgressMsg = "In progress"
-	// TaskStatusTransferCompletedMsg is the message returned when a ytansfer is completed
+	// TaskStatusTransferCompletedMsg is the message returned when a transfer is completed
 	TaskStatusTransferCompletedMsg = "Transfer completed"
+	// TaskStatusReplicationCompletedMsg is the message returned when a replication is completed
+	TaskStatusReplicationCompletedMsg = "Replication completed"
 	// TaskStatusDataDeletedMsg is the message returned when data is deleted
 	TaskStatusDataDeletedMsg = "Data deleted"
 	// TaskStatusCloudAccessEnabledMsg is the message returned when the access to cloud staging area is enabled
@@ -54,10 +56,13 @@ const (
 	ReplicationStatusDatasetNotReplicated = "Dataset is not replicated"
 	ReplicationStatusNoSuchDataset        = "Dataset doesn't exist or you don't have permission to access it"
 
+	invalidTokenError = "Invalid Token"
+
 	enableCloudAccessREST           = "/cloud/add"
 	disableCloudAccessREST          = "/cloud/remove"
 	ddiStagingStageREST             = "/stage"
 	ddiStagingDeleteREST            = "/delete"
+	ddiStagingReplicateREST         = "/replicate"
 	ddiStagingReplicationStatusREST = "/replication/status"
 	ddiStagingDatasetInfoREST       = "/data/size"
 	ddiDatasetSearchREST            = "/search/metadata"
@@ -77,6 +82,9 @@ const (
 	locationCloudStagingAreaGroupIDPropertyName          = "cloud_staging_area_group_id"
 )
 
+// RefreshTokenFunc is a type of function provided by the caller to refresh a token when needed
+type RefreshTokenFunc func() (newAccessToken string, err error)
+
 // Client is the client interface to Distrbuted Data Infrastructure (DDI) service
 type Client interface {
 	CreateEmptyDatasetInProject(token, project string, metadata Metadata) (string, error)
@@ -85,12 +93,13 @@ type Client interface {
 	GetDisableCloudAccessRequestStatus(token, requestID string) (string, error)
 	GetEnableCloudAccessRequestStatus(token, requestID string) (string, error)
 	SubmitCloudStagingAreaDataDeletion(token, path string) (string, error)
-	SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error)
+	SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath, encryption, compression string) (string, error)
 	SubmitDDIDatasetInfoRequest(token, targetSystem, ddiPath string) (string, error)
 	SubmitDDIDataDeletion(token, path string) (string, error)
-	SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error)
-	SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath string, jobID, taskID int64) (string, error)
-	SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath string, jobID, taskID int64) (string, error)
+	SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath, encryption, compression string) (string, error)
+	SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath, encryption, compression, heappeURL string, jobID, taskID int64) (string, error)
+	SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath, encryption, compression, heappeURL string, jobID, taskID int64) (string, error)
+	SubmitDDIReplicationRequest(token, sourceSystem, sourcePath, targetSystem string) (string, error)
 	GetCloudStagingAreaProperties() LocationCloudStagingArea
 	GetDDIDatasetInfoRequestStatus(token, requestID string) (string, string, string, string, error)
 	GetDataTransferRequestStatus(token, requestID string) (string, string, error)
@@ -98,6 +107,7 @@ type Client interface {
 	GetCloudStagingAreaName() string
 	GetDatasetURL() string
 	GetDDIAreaName() string
+	GetReplicationsRequestStatus(token, requestID string) (string, string, string, error)
 	GetReplicationStatus(token, targetSystem, targetPath string) (string, error)
 	GetSshfsURL() string
 	GetStagingURL() string
@@ -107,7 +117,7 @@ type Client interface {
 }
 
 // GetClient returns a DDI client for a given location
-func GetClient(locationProps config.DynamicMap) (Client, error) {
+func GetClient(locationProps config.DynamicMap, refreshTokenFunc RefreshTokenFunc) (Client, error) {
 
 	url := locationProps.GetString(locationStagingURLPropertyName)
 	if url == "" {
@@ -136,8 +146,8 @@ func GetClient(locationProps config.DynamicMap) (Client, error) {
 	return &ddiClient{
 		ddiArea:           ddiArea,
 		cloudStagingArea:  cloudStagingArea,
-		httpStagingClient: getHTTPClient(url),
-		httpDatasetClient: getHTTPClient(datasetURL),
+		httpStagingClient: getHTTPClient(url, refreshTokenFunc),
+		httpDatasetClient: getHTTPClient(datasetURL, refreshTokenFunc),
 		StagingURL:        url,
 		SshfsURL:          sshfsURL,
 		DatasetURL:        datasetURL,
@@ -159,16 +169,11 @@ func (d *ddiClient) IsAlive() bool {
 
 	response, err := http.Get(d.StagingURL)
 	if err != nil {
-		log.Debugf("DDI client isAlive(): request to %s returned %s\n", d.StagingURL, err.Error())
+		log.Printf("DDI client isAlive(): request to %s returned %s\n", d.StagingURL, err.Error())
 		return false
 	}
 	response.Body.Close()
 	log.Debugf("DDI client isAlive(): request to %s returned status %d\n", d.StagingURL, response.StatusCode)
-
-	// TODO: to remove when IT4I will have the endpoint
-	if d.ddiArea == "it4i_iRODS" {
-		return false
-	}
 	return response.StatusCode == 200 || response.StatusCode == 301 || response.StatusCode == 302
 }
 
@@ -229,7 +234,7 @@ func (d *ddiClient) GetDisableCloudAccessRequestStatus(token, requestID string) 
 }
 
 // SubmitDDIToCloudDataTransfer submits a data transfer request from DDI to Cloud
-func (d *ddiClient) SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath string) (string, error) {
+func (d *ddiClient) SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSourcePath, cloudStagingAreaDestinationPath, encryption, compression string) (string, error) {
 
 	request := DataTransferRequest{
 		Metadata:     metadata,
@@ -237,6 +242,8 @@ func (d *ddiClient) SubmitDDIToCloudDataTransfer(metadata Metadata, token, ddiSo
 		SourcePath:   ddiSourcePath,
 		TargetSystem: d.cloudStagingArea.Name,
 		TargetPath:   cloudStagingAreaDestinationPath,
+		Encryption:   encryption,
+		Compression:  compression,
 	}
 
 	requestStr, _ := json.Marshal(request)
@@ -274,7 +281,7 @@ func (d *ddiClient) SubmitDDIDatasetInfoRequest(token, targetSystem, ddiPath str
 }
 
 // SubmitCloudToDDIDataTransfer submits a data transfer request from Cloud to DDI
-func (d *ddiClient) SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath string) (string, error) {
+func (d *ddiClient) SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloudStagingAreaSourcePath, ddiDestinationPath, encryption, compression string) (string, error) {
 
 	request := DataTransferRequest{
 		Metadata:     metadata,
@@ -282,6 +289,8 @@ func (d *ddiClient) SubmitCloudToDDIDataTransfer(metadata Metadata, token, cloud
 		SourcePath:   cloudStagingAreaSourcePath,
 		TargetSystem: d.ddiArea,
 		TargetPath:   ddiDestinationPath,
+		Encryption:   encryption,
+		Compression:  compression,
 	}
 	var response SubmittedRequestInfo
 	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingStageREST,
@@ -328,7 +337,7 @@ func (d *ddiClient) SubmitCloudStagingAreaDataDeletion(token, path string) (stri
 }
 
 // SubmitDDIToHPCDataTransfer submits a data transfer request from DDI to HPC
-func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath string, jobID, taskID int64) (string, error) {
+func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSourcePath, targetSystem, hpcDirectoryPath, encryption, compression, heappeURL string, jobID, taskID int64) (string, error) {
 
 	request := HPCDataTransferRequest{
 		DataTransferRequest{
@@ -337,10 +346,13 @@ func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSour
 			SourcePath:   ddiSourcePath,
 			TargetSystem: targetSystem,
 			TargetPath:   hpcDirectoryPath,
+			Encryption:   encryption,
+			Compression:  compression,
 		},
-		DataTransferRequestHPCExectension{
-			JobID:  jobID,
-			TaskID: taskID,
+		DataTransferRequestHPCExtension{
+			HEAppEURL: heappeURL,
+			JobID:     jobID,
+			TaskID:    taskID,
 		},
 	}
 
@@ -351,14 +363,14 @@ func (d *ddiClient) SubmitDDIToHPCDataTransfer(metadata Metadata, token, ddiSour
 	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingStageREST,
 		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed to submit DDI %s to HPC %s %s data transfer", ddiSourcePath, targetSystem, hpcDirectoryPath)
+		err = errors.Wrapf(err, "Failed to submit DDI %s to HPC %s %s %s data transfer", ddiSourcePath, heappeURL, targetSystem, hpcDirectoryPath)
 	}
 
 	return response.RequestID, err
 }
 
 // SubmitHPCToDDIDataTransfer submits a data transfer request from HPC to DDI
-func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath string, jobID, taskID int64) (string, error) {
+func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceSystem, hpcDirectoryPath, ddiPath, encryption, compression, heappeURL string, jobID, taskID int64) (string, error) {
 
 	request := HPCDataTransferRequest{
 		DataTransferRequest{
@@ -367,10 +379,13 @@ func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceS
 			SourcePath:   hpcDirectoryPath,
 			TargetSystem: d.ddiArea,
 			TargetPath:   ddiPath,
+			Encryption:   encryption,
+			Compression:  compression,
 		},
-		DataTransferRequestHPCExectension{
-			JobID:  jobID,
-			TaskID: taskID,
+		DataTransferRequestHPCExtension{
+			HEAppEURL: heappeURL,
+			JobID:     jobID,
+			TaskID:    taskID,
 		},
 	}
 
@@ -381,7 +396,29 @@ func (d *ddiClient) SubmitHPCToDDIDataTransfer(metadata Metadata, token, sourceS
 	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingStageREST,
 		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed to submit HPC %s %s to DDI %s data transfer", sourceSystem, hpcDirectoryPath, ddiPath)
+		err = errors.Wrapf(err, "Failed to submit HPC %s %s %s to DDI %s data transfer", heappeURL, sourceSystem, hpcDirectoryPath, ddiPath)
+	}
+
+	return response.RequestID, err
+}
+
+// SubmitDDIReplication submits a replication request
+func (d *ddiClient) SubmitDDIReplicationRequest(token, sourceSystem, sourcePath, targetSystem string) (string, error) {
+
+	request := DataTransferRequest{
+		SourceSystem: sourceSystem,
+		SourcePath:   sourcePath,
+		TargetSystem: targetSystem,
+	}
+
+	requestStr, _ := json.Marshal(request)
+	log.Debugf("Submitting DDI replication request %s", string(requestStr))
+
+	var response SubmittedRequestInfo
+	err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingReplicateREST,
+		[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit replication of %s %s to %s", sourceSystem, sourcePath, targetSystem)
 	}
 
 	return response.RequestID, err
@@ -427,6 +464,20 @@ func (d *ddiClient) GetDeletionRequestStatus(token, requestID string) (string, e
 	return response.Status, err
 }
 
+// GetReplicationsRequestStatus returns the status of a replication request
+// and the path of the replicated dataset on the destination
+func (d *ddiClient) GetReplicationsRequestStatus(token, requestID string) (string, string, string, error) {
+
+	var response RequestStatus
+	err := d.httpStagingClient.doRequest(http.MethodGet, path.Join(ddiStagingReplicateREST, requestID),
+		[]int{http.StatusOK}, token, nil, &response)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to submit get status for replication request %s", requestID)
+	}
+
+	return response.Status, response.TargetPath, response.PID, err
+}
+
 // GetReplicationStatus returns the replication startus of a dataset on a given location
 func (d *ddiClient) GetReplicationStatus(token, targetSystem, targetPath string) (string, error) {
 
@@ -438,17 +489,17 @@ func (d *ddiClient) GetReplicationStatus(token, targetSystem, targetPath string)
 	var err error
 	// Retrying several times as this call regularly returns an error 500 Internal Server Error
 	for i := 1; i < 5; i++ {
-		err := d.httpStagingClient.doRequest(http.MethodPost, ddiStagingReplicationStatusREST,
+		err = d.httpStagingClient.doRequest(http.MethodPost, ddiStagingReplicationStatusREST,
 			[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
 		if err != nil {
 			err = errors.Wrapf(err, "Failed to submit replication status request for system %s path %s", targetSystem, targetPath)
 			if strings.Contains(err.Error(), "500 Internal Server Error") {
-				log.Printf("Attempt %d of submit replication status request for %s %s failed on error 500 Internal server error\n",
-					i, targetSystem, targetPath)
+				log.Printf("Attempt %d of submit replication status request to %s%s for %q %q failed on error 500 Internal server error\n",
+					i, d.httpStagingClient.baseURL, ddiStagingReplicationStatusREST, targetSystem, targetPath)
 			} else {
 				break
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(5 * time.Second)
 		}
 	}
 

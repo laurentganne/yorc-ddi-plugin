@@ -84,7 +84,12 @@ func (e *EnableCloudAccessJobExecution) submitEnableCloudAccess(ctx context.Cont
 		return errors.Errorf("Failed to get ip address for which to enable access to Cloud staging area")
 	}
 
-	requestID, err := ddiClient.SubmitEnableCloudAccess(e.Token, ipAddress)
+	token, err := e.AAIClient.GetAccessToken()
+	if err != nil {
+		return err
+	}
+
+	requestID, err := ddiClient.SubmitEnableCloudAccess(token, ipAddress)
 	if err != nil {
 		return err
 	}

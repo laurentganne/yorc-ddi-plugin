@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -26,12 +27,12 @@ import (
 
 	"github.com/ystia/yorc/v4/config"
 	"github.com/ystia/yorc/v4/deployments"
+	"github.com/ystia/yorc/v4/events"
 	"github.com/ystia/yorc/v4/locations"
 	"github.com/ystia/yorc/v4/prov"
 )
 
 const (
-	ddiInfrastructureType                   = "ddi"
 	locationJobMonitoringTimeInterval       = "job_monitoring_time_interval"
 	locationDefaultMonitoringTimeInterval   = 5 * time.Second
 	ddiAccessComponentType                  = "org.lexis.common.ddi.nodes.DDIAccess"
@@ -41,14 +42,16 @@ const (
 	disableCloudStagingAreaJobType          = "org.lexis.common.ddi.nodes.DisableCloudStagingAreaAccessJob"
 	ddiToCloudJobType                       = "org.lexis.common.ddi.nodes.DDIToCloudJob"
 	ddiToHPCTaskJobType                     = "org.lexis.common.ddi.nodes.DDIToHPCTaskJob"
-	hpcToDDIJobType                         = "org.lexis.common.ddi.nodes.pub.HPCToDDIJob"
+	hpcToDDIJobType                         = "org.lexis.common.ddi.nodes.HPCToDDIJob"
 	ddiRuntimeToCloudJobType                = "org.lexis.common.ddi.nodes.DDIRuntimeToCloudJob"
 	ddiRuntimeToHPCTaskJobType              = "org.lexis.common.ddi.nodes.DDIRuntimeToHPCTaskJob"
 	cloudToDDIJobType                       = "org.lexis.common.ddi.nodes.CloudToDDIJob"
-	waitForDDIDatasetJobType                = "org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob"
-	storeRunningHPCJobType                  = "org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob"
+	waitForDDIDatasetJobType                = "org.lexis.common.ddi.nodes.WaitForDDIDatasetJob"
+	storeRunningHPCJobType                  = "org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIJob"
+	storeRunningHPCJobGroupByDatasetType    = "org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIGroupByDatasetJob"
 	deleteCloudDataJobType                  = "org.lexis.common.ddi.nodes.DeleteCloudDataJob"
 	getDDIDatasetInfoJobType                = "org.lexis.common.ddi.nodes.GetDDIDatasetInfoJob"
+	sshfsMountStagingAreaDataset            = "org.lexis.common.ddi.nodes.SSHFSMountStagingAreaDataset"
 )
 
 // Execution is the interface holding functions to execute an operation
@@ -74,7 +77,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		return nil, err
 	}
 	locationProps, err := locationMgr.GetLocationPropertiesForNode(ctx,
-		deploymentID, nodeName, ddiInfrastructureType)
+		deploymentID, nodeName, common.DDIInfrastructureType)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +87,16 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 		// Default value
 		monitoringTimeInterval = locationDefaultMonitoringTimeInterval
 	}
+
+	// Defining a long monitoring internal for very long jobs, that will override
+	// the monitoring time interval
+	longMonitoringTimeInterval := time.Minute
+	if longMonitoringTimeInterval < monitoringTimeInterval {
+		longMonitoringTimeInterval = monitoringTimeInterval
+	}
+
+	// Getting an AAI client to manage tokens
+	aaiClient := common.GetAAIClient(deploymentID, locationProps)
 
 	isDDIAccessComponent, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, ddiAccessComponentType)
 	if err != nil {
@@ -99,6 +112,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				TaskID:       taskID,
 				NodeName:     nodeName,
 				Operation:    operation,
+				AAIClient:    aaiClient,
 			},
 		}
 		return exec, exec.ResolveExecution(ctx)
@@ -118,6 +132,7 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				TaskID:       taskID,
 				NodeName:     nodeName,
 				Operation:    operation,
+				AAIClient:    aaiClient,
 			},
 		}
 		return exec, exec.ResolveExecution(ctx)
@@ -137,18 +152,69 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				TaskID:       taskID,
 				NodeName:     nodeName,
 				Operation:    operation,
+				AAIClient:    aaiClient,
 			},
 		}
 		return exec, exec.ResolveExecution(ctx)
 	}
 
-	// Other executions require a token
-	token, err := deployments.GetStringNodePropertyValue(ctx, deploymentID, nodeName, "accessToken")
+	ids, err := deployments.GetNodeInstancesIds(ctx, deploymentID, nodeName)
 	if err != nil {
 		return exec, err
 	}
-	if token == "" {
-		return exec, errors.Errorf("No value provided for deployement %s node %s proerty token", deploymentID, nodeName)
+
+	if len(ids) == 0 {
+		return exec, errors.Errorf("Found no instance for node %s in deployment %s", nodeName, deploymentID)
+	}
+
+	accessToken, err := aaiClient.GetAccessToken()
+	if err != nil {
+		return nil, err
+	}
+
+	if accessToken == "" {
+		token, err := deployments.GetStringNodePropertyValue(ctx, deploymentID,
+			nodeName, "token")
+		if err != nil {
+			return exec, err
+		}
+
+		if token == "" {
+			return exec, errors.Errorf("Found no token node %s in deployment %s", nodeName, deploymentID)
+		}
+
+		valid, err := aaiClient.IsAccessTokenValid(ctx, token)
+		if err != nil {
+			return exec, errors.Wrapf(err, "Failed to check validity of token")
+		}
+
+		if !valid {
+			errorMsg := fmt.Sprintf("Token provided in input for Job %s is not anymore valid", nodeName)
+			events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelERROR, deploymentID).Registerf(errorMsg)
+			return exec, errors.Errorf(errorMsg)
+		}
+		// Exchange this token for an access and a refresh token for the orchestrator
+		accessToken, _, err = aaiClient.ExchangeToken(ctx, token)
+		if err != nil {
+			return exec, errors.Wrapf(err, "Failed to exchange token for orchestrator")
+		}
+
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, deploymentID).Registerf(
+			fmt.Sprintf("Token exchanged for an orchestrator client access/refresh token for node %s", nodeName))
+
+	}
+
+	// Checking the access token validity
+	valid, err := aaiClient.IsAccessTokenValid(ctx, accessToken)
+	if err != nil {
+		return exec, errors.Wrapf(err, "Failed to check validity of access token")
+	}
+
+	if !valid {
+		accessToken, _, err = aaiClient.RefreshToken(ctx)
+		if err != nil {
+			return exec, errors.Wrapf(err, "Failed to refresh token for orchestrator")
+		}
 	}
 
 	isDDIDatasetInfoJob, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, getDDIDatasetInfoJobType)
@@ -164,8 +230,8 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.GetDDIDatasetInfoAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -188,8 +254,8 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.CloudDataDeleteAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -211,8 +277,8 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -235,8 +301,8 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -259,8 +325,8 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -283,8 +349,8 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -307,8 +373,8 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -331,8 +397,8 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DataTransferAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -354,10 +420,32 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 				DeploymentID: deploymentID,
 				TaskID:       taskID,
 				NodeName:     nodeName,
-				Token:        token,
 				Operation:    operation,
+				AAIClient:    aaiClient,
 			},
 			MonitoringTimeInterval: monitoringTimeInterval,
+		}
+
+		return exec, exec.ResolveExecution(ctx)
+	}
+
+	nodeType, err := deployments.GetNodeType(ctx, deploymentID, nodeName)
+	if err != nil {
+		return exec, err
+	}
+	isStoreRunningHPCJobGroupByDatasetType := (nodeType == storeRunningHPCJobGroupByDatasetType)
+	if isStoreRunningHPCJobGroupByDatasetType {
+		exec = &job.StoreRunningHPCJobFilesGroupByDataset{
+			DDIExecution: &common.DDIExecution{
+				KV:           kv,
+				Cfg:          cfg,
+				DeploymentID: deploymentID,
+				TaskID:       taskID,
+				NodeName:     nodeName,
+				Operation:    operation,
+				AAIClient:    aaiClient,
+			},
+			MonitoringTimeInterval: longMonitoringTimeInterval,
 		}
 
 		return exec, exec.ResolveExecution(ctx)
@@ -369,19 +457,16 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 	}
 	if isStoreRunningHPCJobType {
 		exec = &job.StoreRunningHPCJobFilesToDDI{
-			DDIJobExecution: &job.DDIJobExecution{
-				DDIExecution: &common.DDIExecution{
-					KV:           kv,
-					Cfg:          cfg,
-					DeploymentID: deploymentID,
-					TaskID:       taskID,
-					NodeName:     nodeName,
-					Token:        token,
-					Operation:    operation,
-				},
-				ActionType:             job.StoreRunningHPCJobFilesToDDIAction,
-				MonitoringTimeInterval: monitoringTimeInterval,
+			DDIExecution: &common.DDIExecution{
+				KV:           kv,
+				Cfg:          cfg,
+				DeploymentID: deploymentID,
+				TaskID:       taskID,
+				NodeName:     nodeName,
+				Operation:    operation,
+				AAIClient:    aaiClient,
 			},
+			MonitoringTimeInterval: longMonitoringTimeInterval,
 		}
 
 		return exec, exec.ResolveExecution(ctx)
@@ -401,8 +486,8 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.EnableCloudAccessAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
@@ -425,13 +510,40 @@ func newExecution(ctx context.Context, cfg config.Configuration, taskID, deploym
 					DeploymentID: deploymentID,
 					TaskID:       taskID,
 					NodeName:     nodeName,
-					Token:        token,
 					Operation:    operation,
+					AAIClient:    aaiClient,
 				},
 				ActionType:             job.DisableCloudAccessAction,
 				MonitoringTimeInterval: monitoringTimeInterval,
 			},
 		}
+		return exec, exec.ResolveExecution(ctx)
+	}
+
+	isSshfsMountStagingAreaDataset, err := deployments.IsNodeDerivedFrom(ctx, deploymentID, nodeName, sshfsMountStagingAreaDataset)
+	if err != nil {
+		return exec, err
+	}
+
+	if isSshfsMountStagingAreaDataset {
+		exec = &standard.SSHFSMountStagingAreaDataset{
+			DDIExecution: &common.DDIExecution{
+				KV:           kv,
+				Cfg:          cfg,
+				DeploymentID: deploymentID,
+				TaskID:       taskID,
+				NodeName:     nodeName,
+				Operation:    operation,
+				AAIClient:    aaiClient,
+			},
+		}
+		// The start operation expects to find the access token in the component attributes
+		err = deployments.SetAttributeForAllInstances(ctx, deploymentID, nodeName,
+			"access_token", accessToken)
+		if err != nil {
+			return exec, err
+		}
+
 		return exec, exec.ResolveExecution(ctx)
 	}
 

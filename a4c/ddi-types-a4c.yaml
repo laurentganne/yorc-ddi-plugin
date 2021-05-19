@@ -2,8 +2,10 @@ tosca_definitions_version: alien_dsl_2_0_0
 
 metadata:
   template_name: org.lexis.common.ddi-types
-  template_version: 0.1.3
+  template_version: 0.1.4
   template_author: yorc
+
+description: DDI types - Distributed Data Infrastructure
 
 imports:
   - tosca-normative-types:1.0.0-ALIEN20
@@ -104,10 +106,10 @@ node_types:
   org.lexis.common.ddi.nodes.EnableCloudStagingAreaAccessJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     description: >
-      Enable the access to the Cloud Staging Area for a Compute Instance
+      Enable the access to the Cloud Staging Area for a Compute Instance for NFS mounts
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
     # Atributes added here in addition to capability attributes, so that they
@@ -153,7 +155,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
@@ -167,10 +169,10 @@ node_types:
   org.lexis.common.ddi.nodes.DisableCloudStagingAreaAccessJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
     description: >
-      Disable the access to the Cloud Staging Area for a Compute Instance
+      Disable the access to the Cloud Staging Area for a Compute Instance for NFS mounts
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
     attributes:
@@ -196,7 +198,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             IP_ADDRESS: { get_attribute: [REQ_TARGET, os, public_address] }
@@ -207,20 +209,29 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-  org.lexis.common.ddi.nodes.pub.DDIToCloudJob:
+  org.lexis.common.ddi.nodes.DDIToCloudJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
-    abstract: true
     description: >
-      Transfer datasets from DDI to Cloud staging area (abstract)
+      Transfer dataset from DDI to Cloud staging area
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       ddi_dataset_path:
         description: Path of the DDI dataset to transfer to the Cloud staging area
         type: string
         required: true
+      decrypt:
+        description: Should the dataset be decrypted after transfer
+        type: boolean
+        default: false
+        required: false
+      uncompress:
+        description: Should the dataset be uncompressed after transfer
+        type: boolean
+        default: false
+        required: false
       cloud_staging_area_directory_path:
         type: string
         description: >
@@ -249,6 +260,12 @@ node_types:
     capabilities:
       data_transfer:
         type: org.lexis.common.ddi.capabilities.DataTransferCloud
+    requirements:
+      - os:
+          capability: tosca.capabilities.OperatingSystem
+          node: tosca.nodes.Compute
+          relationship: org.lexis.common.ddi.relationships.SameSite
+          occurrences: [1, 1]
     interfaces:
       Standard:
         create:
@@ -261,10 +278,12 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
+            DECRYPT: { get_property: [SELF, decrypt] }
+            UNCOMPRESS: { get_property: [SELF, uncompress] }
             CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_property: [SELF, cloud_staging_area_directory_path] }
             TIMESTAMP_CLOUD_STAGING_AREA_DIRECTORY: { get_property: [SELF, timestamp_cloud_staging_area_directory] }
           implementation:
@@ -274,20 +293,25 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-  org.lexis.common.ddi.nodes.DDIToCloudJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.DDIToCloudJob
-    description: >
-      Transfer datasets from DDI to Cloud staging area
-  org.lexis.common.ddi.nodes.pub.CloudToDDIJob:
+  org.lexis.common.ddi.nodes.CloudToDDIJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
-    abstract: true
     description: >
-      Transfer data from Cloud staging area to DDI (abstract)
+      Transfer data from Cloud staging area to DDI
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
+      encrypt:
+        description: Should the dataset be encrypted
+        type: boolean
+        default: false
+        required: false
+      compress:
+        description: Should the dataset be compressed
+        type: boolean
+        default: false
+        required: false
       metadata:
         description: Dataset metadata
         type: org.lexis.common.ddi.types.Metadata
@@ -332,12 +356,14 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             SOURCE_SUBDIRECTORY:  { get_property: [SELF, source_subdirectory] }
             SOURCE_FILE_NAME:  { get_property: [SELF, source_file_name] }
             DDI_PATH: { get_property: [SELF, ddi_path] }
+            ENCRYPT: { get_property: [SELF, encrypt] }
+            COMPRESS: { get_property: [SELF, compress] }
             CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_directory_provider, staging_area_directory_path] }
           implementation:
             file: ddi-types-a4c.yaml
@@ -346,18 +372,13 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-  org.lexis.common.ddi.nodes.CloudToDDIJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.CloudToDDIJob
-    description: >
-      Transfer data from Cloud staging area to DDI
-  org.lexis.common.ddi.nodes.pub.DeleteCloudDataJob:
+  org.lexis.common.ddi.nodes.DeleteCloudDataJob:
     derived_from: tosca.nodes.Root
-    abstract: true
     description: >
-      Delete a dataset from Cloud staging area (abstract)
+      Delete a dataset from Cloud staging area
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
     attributes:
@@ -385,7 +406,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             CLOUD_STAGING_AREA_DIRECTORY_PATH: { get_attribute: [REQ_TARGET, cloud_area_dataset_provider, staging_area_directory_path] }
@@ -396,24 +417,15 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-  org.lexis.common.ddi.nodes.DeleteCloudDataJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.DeleteCloudDataJob
-    description: >
-      Delete a dataset from Cloud staging area
-  org.lexis.common.ddi.nodes.pub.DDIToHPCTaskJob:
+  org.lexis.common.ddi.nodes.DDIToHPCTaskJob:
     derived_from: tosca.nodes.Root
-    abstract: true
     description: >
-      Transfer datasets from DDI to HPC staging area for a given task in the job (abstract)
+      Transfer dataset from DDI to HPC staging area for a given task in the job
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
-      metadata:
-        description: Dataset metadata
-        type: org.lexis.common.ddi.types.Metadata
-        required: false
       ddi_dataset_path:
         description: Path of the DDI dataset to transfer to HPC
         type: string
@@ -422,6 +434,20 @@ node_types:
         description: Name of the task in the Job
         type: string
         required: true
+      decrypt:
+        description: Should the dataset be decrypted after transfer
+        type: boolean
+        default: false
+        required: false
+      uncompress:
+        description: Should the dataset be uncompressed after transfer
+        type: boolean
+        default: false
+        required: false
+      metadata:
+        description: Dataset metadata
+        type: org.lexis.common.ddi.types.Metadata
+        required: false
     attributes:
       request_id:
         type: string
@@ -451,13 +477,16 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
+            DECRYPT: { get_property: [SELF, decrypt] }
+            UNCOMPRESS: { get_property: [SELF, uncompress] }
             DDI_DATASET_PATH: { get_property: [SELF, ddi_dataset_path] }
             HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
             HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
             HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            HEAPPE_URL: {get_attribute: [REQ_TARGET, job, heappe_url]}
             TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
             TASK_NAME: {get_property: [SELF, task_name]}
           implementation:
@@ -467,18 +496,13 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-  org.lexis.common.ddi.nodes.DDIToHPCTaskJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.DDIToHPCTaskJob
-    description: >
-      Transfer datasets from DDI to HPC staging area for a given task in the job
-  org.lexis.common.ddi.nodes.pub.HPCToDDIJob:
+  org.lexis.common.ddi.nodes.HPCToDDIJob:
     derived_from: tosca.nodes.Root
-    abstract: true
     description: >
-      Transfer data from an HPC job to DDI (abstract)
+      Transfer data from an HPC job to DDI
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       metadata:
@@ -492,6 +516,16 @@ node_types:
       task_name:
         description: Name of the task for which to store results. If not set, all tasks results are saved.
         type: string
+        required: false
+      encrypt:
+        description: Should the dataset be encrypted
+        type: boolean
+        default: false
+        required: false
+      compress:
+        description: Should the dataset be compressed
+        type: boolean
+        default: false
         required: false
     attributes:
       request_id:
@@ -522,15 +556,18 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
             HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
             HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            HEAPPE_URL: {get_attribute: [REQ_TARGET, job, heappe_url]}
             TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
             TASK_NAME: {get_property: [SELF, task_name]}
             DDI_PATH: { get_property: [SELF, ddi_path] }
+            ENCRYPT: { get_property: [SELF, encrypt] }
+            COMPRESS: { get_property: [SELF, compress] }
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -538,18 +575,13 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-  org.lexis.common.ddi.nodes.HPCToDDIJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.HPCToDDIJob
-    description: >
-      Transfer data from an HPC job to DDI
-  org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob:
+  org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIJob:
     derived_from: tosca.nodes.Root
-    abstract: true
     description: >
-      Transfer files from an HPC running job to DDI until this HPC job ends (abstract)
+      Transfer files from an HPC running job to DDI until this HPC job ends
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       metadata:
@@ -560,6 +592,16 @@ node_types:
         description: Name of the project where to store the result dataset
         type: string
         required: true
+      encrypt:
+        description: Should the dataset be encrypted
+        type: boolean
+        default: false
+        required: false
+      compress:
+        description: Should the dataset be compressed
+        type: boolean
+        default: false
+        required: false
       last_modification_elapsed_time_minutes:
         description: Elapsed time in minutes since last modification after which a file can be stored in DDI
         type: integer
@@ -608,7 +650,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           implementation:
             file: ddi-types-a4c.yaml
@@ -618,22 +660,46 @@ node_types:
             HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
             HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
             HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            HEAPPE_URL: {get_attribute: [REQ_TARGET, job, heappe_url]}
             TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
             JOB_CHANGED_FILES: {get_attribute: [REQ_TARGET, job, changed_files]}
             JOB_START_DATE: {get_attribute: [REQ_TARGET, job, start_date]}
             JOB_STATE: {get_attribute: [REQ_TARGET, job, state]}
+            ENCRYPT: { get_property: [SELF, encrypt] }
+            COMPRESS: { get_property: [SELF, compress] }
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-  org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.StoreRunningHPCJobFilesToDDIJob
+  org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIGroupByDatasetJob:
+    derived_from: org.lexis.common.ddi.nodes.StoreRunningHPCJobFilesToDDIJob
     description: >
-      Transfer files from an HPC running job to DDI until this HPC job ends
+      Transfer files from an HPC running job to DDI and group them per dataset according to a pattern, until this HPC job ends
+    properties:
+      group_files_pattern:
+        type: string
+        description: >
+          Pattern identifying group of files to store in a dataset. Files with same pattern value go in the same dataset.
+          Example: For a regular expression ".*_t([0-9]+).dat" and a file myfile_t00001.dat, this will return the identifier 00001
+        required: true
+      replication_sites:
+        type: list
+        entry_schema:
+          type: string
+        description: |
+          List of sites on which the dataset should be replicated
+        required: false
+    attributes:
+      dataset_replication:
+        type: map
+        description: Map of dataset replication status per group identifier
   org.lexis.common.ddi.nodes.DDIAccess:
     derived_from: tosca.nodes.Root
     description: >
       Provides access to the DDI API
     attributes:
+      dataset_url:
+        type: string
+        description: DDI API dataset URL
       staging_url:
         type: string
         description: >
@@ -657,14 +723,13 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-  org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob:
+  org.lexis.common.ddi.nodes.WaitForDDIDatasetJob:
     derived_from: tosca.nodes.Root
-    abstract: true
     description: >
-      Wait for a dataset to appear in DDI, and optionally wait for files in this dataset (abstract)
+      Wait for a dataset to appear in DDI, and optionally wait for files in this dataset
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       metadata:
@@ -704,7 +769,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             METADATA: { get_property: [SELF, metadata] }
@@ -716,18 +781,13 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-  org.lexis.common.ddi.nodes.WaitForDDIDatasetJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob
-    description: >
-      Wait for a dataset to appear in DDI, and optionally wait for files in this dataset
-  org.lexis.common.ddi.nodes.pub.DDIRuntimeToCloudJob:
+  org.lexis.common.ddi.nodes.DDIRuntimeToCloudJob:
     derived_from: org.lexis.common.ddi.nodes.pub.Cloud
-    abstract: true
     description: >
-      Transfer from DDI to Cloud staging area, a dataset (or one dataset file) selected at runtime (abstract)
+      Transfer from DDI to Cloud staging area, a dataset (or one dataset file) selected at runtime
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       file_pattern:
@@ -746,7 +806,7 @@ node_types:
         default: ""
       timestamp_cloud_staging_area_directory:
         type: boolean
-        description: Add a tiemstamp to cloud_staging_area_directory_path
+        description: Add a timestamp to cloud_staging_area_directory_path
         default: false
         required: false
     attributes:
@@ -769,7 +829,7 @@ node_types:
     requirements:
       - dataset_files:
           capability: org.lexis.common.ddi.capabilities.DatasetFilesProvider
-          node: org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob
+          node: org.lexis.common.ddi.nodes.WaitForDDIDatasetJob
           relationship: org.lexis.common.ddi.relationships.DatasetFilesProvider
           occurrences: [1, 1]
     interfaces:
@@ -784,7 +844,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_attribute: [REQ_TARGET, dataset_files, dataset_path] }
@@ -799,18 +859,13 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-  org.lexis.common.ddi.nodes.DDIRuntimeToCloudJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.DDIRuntimeToCloudJob
-    description: >
-      Transfer from DDI to Cloud staging area, a dataset (or one dataset file) selected at runtime
-  org.lexis.common.ddi.nodes.pub.DDIRuntimeToHPCTaskJob:
+  org.lexis.common.ddi.nodes.DDIRuntimeToHPCTaskJob:
     derived_from: tosca.nodes.Root
-    abstract: true
     description: >
-      Transfer from DDI to HPC staging area, a dataset (or one dataset file) selected at runtime (abstract)
+      Transfer from DDI to HPC staging area, a dataset (or one dataset file) selected at runtime
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       task_name:
@@ -844,7 +899,7 @@ node_types:
           occurrences: [1, 1]
       - dataset_files:
           capability: org.lexis.common.ddi.capabilities.DatasetFilesProvider
-          node: org.lexis.common.ddi.nodes.pub.WaitForDDIDatasetJob
+          node: org.lexis.common.ddi.nodes.WaitForDDIDatasetJob
           relationship: org.lexis.common.ddi.relationships.DatasetFilesProvider
           occurrences: [1, 1]
     interfaces:
@@ -859,7 +914,7 @@ node_types:
             type: yorc.artifacts.Deployment.SlurmJob
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_attribute: [REQ_TARGET, dataset_files, dataset_path] }
@@ -867,6 +922,7 @@ node_types:
             HPC_DIRECTORY_PATH: {get_attribute: [REQ_TARGET, job, file_transfer, path]}
             HPC_SERVER: {get_attribute: [REQ_TARGET, job, file_transfer, server]}
             HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            HEAPPE_URL: {get_attribute: [REQ_TARGET, job, heappe_url]}
             TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
             FILE_PATTERN: { get_property: [SELF, file_pattern] }
             TASK_NAME: {get_property: [SELF, task_name]}
@@ -877,10 +933,6 @@ node_types:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
-  org.lexis.common.ddi.nodes.DDIRuntimeToHPCTaskJob:
-    derived_from: org.lexis.common.ddi.nodes.pub.DDIRuntimeToHPCTaskJob
-    description: >
-      Transfer from DDI to HPC staging area, a dataset (or one dataset file) selected at runtime
   org.lexis.common.ddi.nodes.pub.GetDatasetInfo:
     derived_from: tosca.nodes.Root
     description: >
@@ -907,8 +959,8 @@ node_types:
     description: >
       Get DDI dataset info
     properties:
-      accessToken:
-        description: Access token
+      token:
+        description: OpenID Connect token
         type: string
         required: true
       dataset_path:
@@ -921,7 +973,7 @@ node_types:
     interfaces:
       tosca.interfaces.node.lifecycle.Runnable:
         inputs:
-          TOKEN: { get_property: [SELF, accessToken] }
+          TOKEN: { get_property: [SELF, token] }
         submit:
           inputs:
             DDI_DATASET_PATH: { get_property: [SELF, dataset_path] }
@@ -990,9 +1042,93 @@ node_types:
             JOB_CHANGED_FILES: {get_attribute: [REQ_TARGET, job, changed_files]}
             JOB_START_DATE: {get_attribute: [REQ_TARGET, job, start_date]}
             HEAPPE_JOB_ID: {get_attribute: [REQ_TARGET, job, job_id]}
+            HEAPPE_URL: {get_attribute: [REQ_TARGET, job, heappe_url]}
             TASKS_NAME_ID: {get_attribute: [REQ_TARGET, job, tasks_name_id]}
             TASK_NAME: {get_property: [SELF, task_name]}
             NEEDED_FILES_PATTERNS: { get_property: [SELF, needed_files_patterns] }
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+  org.lexis.common.ddi.nodes.RefreshTargetTokens:
+    derived_from: tosca.nodes.Root
+    description: >
+      Refreshes the access and refresh token attributes of the target
+    requirements:
+      - target:
+          capability: tosca.capabilities.Node
+          node: tosca.nodes.Root
+          relationship: tosca.relationships.DependsOn
+          occurrences: [ 1, 1 ]
+    interfaces:
+      Standard:
+        start:
+          implementation:
+            file: ddi-types-a4c.yaml
+            type: yorc.artifacts.Deployment.SlurmJob
+  org.lexis.common.ddi.nodes.SSHFSMountStagingAreaDataset:
+    derived_from: tosca.nodes.SoftwareComponent
+    description: >
+       SSHFS mount a dataset in the Cloud staging area on a compute instance directory
+    properties:
+      token:
+        description: OpenID Connect token
+        type: string
+        required: true
+      mount_point_directory:
+        description: mount point destination directory (will be created if it does not exist)
+        type: string
+        required: true
+    attributes:
+      user_name: {get_operation_output: [SELF, Standard, start, USER]}
+      directory_absolute_path: {get_operation_output: [SELF, Standard, start, DIRECTORY_PATH]}
+      data_absolute_path: {get_operation_output: [SELF, Standard, start, DATA_PATH]}
+      staging_area_name: {get_operation_output: [SELF, Standard, start, staging_area_name]}
+      staging_area_directory_path: {get_operation_output: [SELF, Standard, start, STAGING_AREA_DIRECTORY_PATH]}
+      sshfsuser: {get_operation_output: [SELF, Standard, start, SSHFS_USER]}
+      staging_area_root_directory: {get_operation_output: [SELF, Standard, start, STAGING_AREA_ROOT_DIRECTORY]}
+      private_key_path: {get_operation_output: [SELF, Standard, start, PRIVATE_KEY_PATH]}
+      access_token:
+        type: string
+        description: OpenID Connect access token
+    capabilities:
+      mounted_staging_area:
+        type: org.lexis.common.ddi.capabilities.MountedStagingAreaAccess
+      cloud_area_directory_provider:
+        type: org.lexis.common.ddi.capabilities.CloudAreaDirectoryProvider
+    requirements:
+      - ddi_access:
+          capability: org.lexis.common.ddi.capabilities.DDIAccess
+          relationship: org.lexis.common.ddi.relationships.DDIAccessProvider
+          occurrences: [1, 1]
+      - data_transfer:
+          capability: org.lexis.common.ddi.capabilities.DataTransferCloud
+          relationship: org.lexis.common.ddi.relationships.CloudAreaDatasetProvider
+          occurrences: [1, 1]
+    interfaces:
+      Standard:
+        create:
+          implementation: playbooks/install_sshfs.yaml
+        start:
+          inputs:
+            ACCESS_TOKEN: { get_attribute: [SELF, access_token] }
+            MOUNT_POINT_DIRECTORY: { get_property: [SELF, mount_point_directory] }
+            URL: {get_attribute: [REQ_TARGET, ddi_access, sshfs_url]}
+            IP_ADDRESS: { get_attribute: [HOST, public_address] }
+            staging_area_name: {get_attribute: [REQ_TARGET, data_transfer, staging_area_name]}
+            STAGING_AREA_DIRECTORY: {get_attribute: [REQ_TARGET, data_transfer, staging_area_directory_path]}
+            TARGET_PATH: {get_attribute: [REQ_TARGET, data_transfer, destination_path]}
+          implementation: playbooks/sshfs_export_mount.yaml
+        stop:
+          inputs:
+            ACCESS_TOKEN: { get_attribute: [SELF, access_token] }
+            URL: {get_attribute: [REQ_TARGET, ddi_access, sshfs_url]}
+            SSHFS_USER: { get_attribute: [SELF, sshfsuser] }
+            STAGING_AREA_ROOT_DIRECTORY: { get_attribute: [SELF, staging_area_root_directory] }
+            MOUNT_POINT_DIRECTORY: { get_property: [SELF, mount_point_directory] }
+            PRIVATE_KEY_PATH: { get_attribute: [SELF, private_key_path] }
+          implementation: playbooks/sshfs_unmount_unexport.yaml
+      custom:
+        refresh_token:
           implementation:
             file: ddi-types-a4c.yaml
             type: yorc.artifacts.Deployment.SlurmJob
@@ -1002,6 +1138,9 @@ capability_types:
     description: >
       A capability providing details on the access to DDI
     attributes:
+      dataset_url:
+        type: string
+        description: DDI API dataset URL
       staging_url:
         type: string
         description: DDI API staging URL
@@ -1115,6 +1254,27 @@ capability_types:
       size:
         type: string
         description: Size of the dataset in bytes
+  org.lexis.common.ddi.capabilities.MountedStagingAreaAccess:
+    derived_from: tosca.capabilities.Root
+    description: >
+      A capability fulfilling requirements of a node requiring to be
+      associated with a mounted staging area.
+    attributes:
+      staging_area_name:
+        type: string
+        description: Name of the cloud staging area
+      directory_absolute_path:
+        type: string
+        description: Directory where the cloud staging area file system is mounted
+      data_absolute_path:
+        type: string
+        description: >
+          Path to the cloud staging area data.
+          This is the same as directory_absolute_path when the data is a dataset.
+          This is a file path, when the data is a file copied in directory_absolute_path.
+      user_name:
+        type: string
+        description: name of the user allowed to write in this staging area
 relationship_types:
   org.lexis.common.ddi.relationships.SameSite:
     derived_from: tosca.relationships.DependsOn

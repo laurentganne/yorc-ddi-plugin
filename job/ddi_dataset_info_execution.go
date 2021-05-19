@@ -16,6 +16,7 @@ package job
 
 import (
 	"context"
+	"path"
 	"strings"
 
 	"github.com/laurentganne/yorc-ddi-plugin/ddi"
@@ -82,6 +83,12 @@ func (e *DDIDatasetInfoExecution) submitDatasetInfoRequest(ctx context.Context) 
 		return errors.Errorf("Failed to get path of dataset for which to get info")
 	}
 
+	// The input path could be the path of a file in a dataset
+	splitPath := strings.SplitN(datasetPath, "/", 4)
+	if len(splitPath) > 3 {
+		datasetPath = path.Join(splitPath[0], splitPath[1], splitPath[2])
+	}
+
 	// Get locations where this dataset is available
 	ddiAreaNames, err := e.getAreasForDDIDataset(ctx, ddiClient, datasetPath)
 	if err != nil {
@@ -91,7 +98,17 @@ func (e *DDIDatasetInfoExecution) submitDatasetInfoRequest(ctx context.Context) 
 	if len(ddiAreaNames) == 0 {
 		return errors.Errorf("Found no DDI area having dataset path %s", datasetPath)
 	}
-	requestID, err := ddiClient.SubmitDDIDatasetInfoRequest(e.Token, ddiAreaNames[0], datasetPath)
+
+	token, err := e.AAIClient.GetAccessToken()
+	if err != nil {
+		return err
+	}
+
+	events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+		"Submitting data info request for %s source %s path %s",
+		e.NodeName, ddiAreaNames[0], datasetPath)
+
+	requestID, err := ddiClient.SubmitDDIDatasetInfoRequest(token, ddiAreaNames[0], datasetPath)
 	if err != nil {
 		return err
 	}
@@ -120,9 +137,18 @@ func (e *DDIDatasetInfoExecution) getAreasForDDIDataset(ctx context.Context, ddi
 	if err != nil {
 		return ddiAreas, err
 	}
+	// Get the access token
+	token, err := e.AAIClient.GetAccessToken()
+	if err != nil {
+		return ddiAreas, err
+	}
+
 	// Then check which one has a dataset or a replica
 	for _, ddiAreaName := range ddiAreaNames {
-		status, err := ddiClient.GetReplicationStatus(e.Token, ddiAreaName, datasetPath)
+		events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(
+			"Getting replication status for %q source %q path %q",
+			e.NodeName, ddiAreaName, datasetPath)
+		status, err := ddiClient.GetReplicationStatus(token, ddiAreaName, datasetPath)
 		if err != nil {
 			return ddiAreas, err
 		}

@@ -194,7 +194,7 @@ func (e *DDIExecution) GetHPCJobChangedFilesSinceStartup(ctx context.Context) ([
 	var changedFiles []ChangedFile
 	startDateStr := e.GetValueFromEnvInputs(jobStartDateEnvVar)
 	if startDateStr == "" {
-		log.Debugf("No chnaged files for job associated to %s %s, job not yet started", e.DeploymentID, e.NodeName)
+		log.Debugf("No changed files for job associated to %s %s, job not yet started", e.DeploymentID, e.NodeName)
 		return changedFiles, nil
 	}
 

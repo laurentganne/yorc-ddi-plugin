@@ -102,8 +102,24 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 		destPath = fmt.Sprintf("%s_%d", destPath, time.Now().UnixNano()/1000000)
 	}
 
+	// Check encryption/compression settings
+	decrypt := "no"
+	if e.GetBooleanValueFromEnvInputs(decryptEnvVar) {
+		decrypt = "yes"
+	}
+	uncompress := "no"
+	if e.GetBooleanValueFromEnvInputs(uncompressEnvVar) {
+		uncompress = "yes"
+	}
+
 	// Add the dataset ID to destPath to get the dataset path in staging area
-	datasetCloudAreaPath := path.Join(destPath, path.Base(sourcePath))
+	// except if the source is a file that will be uncompresse
+	var datasetCloudAreaPath string
+	if uncompress == "no" {
+		datasetCloudAreaPath = path.Join(destPath, path.Base(sourcePath))
+	} else {
+		datasetCloudAreaPath = destPath
+	}
 
 	metadata, err := e.getMetadata(ctx)
 	if err != nil {
@@ -113,16 +129,6 @@ func (e *DDIToCloudExecution) submitDataTransferRequest(ctx context.Context) err
 	token, err := e.AAIClient.GetAccessToken()
 	if err != nil {
 		return err
-	}
-
-	// Check encryption/compression settings
-	decrypt := "no"
-	if e.GetBooleanValueFromEnvInputs(decryptEnvVar) {
-		decrypt = "yes"
-	}
-	uncompress := "no"
-	if e.GetBooleanValueFromEnvInputs(uncompressEnvVar) {
-		uncompress = "yes"
 	}
 
 	events.WithContextOptionalFields(ctx).NewLogEntry(events.LogLevelINFO, e.DeploymentID).Registerf(

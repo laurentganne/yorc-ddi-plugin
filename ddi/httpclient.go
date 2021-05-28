@@ -86,7 +86,7 @@ func (c *httpclient) doRequest(method, path string, expectedStatuses []int, toke
 
 	for !done {
 		if newToken != "" {
-			request.Header.Add("Authorization", fmt.Sprintf("Basic %s", newToken))
+			request.Header.Add("Authorization", fmt.Sprintf("Bearer %s", newToken))
 		}
 		request.Header.Add("Content-Type", "application/json")
 		request.Header.Add("Accept", "application/json")

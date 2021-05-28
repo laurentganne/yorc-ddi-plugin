@@ -94,7 +94,7 @@ func (e *HPCDatasetInfoExecution) setHPCJobTaskDatasetInfo(ctx context.Context) 
 	}
 
 	numberOfFiles := len(changedFiles)
-	numberOFfFilesStr := strconv.Itoa(1000 * numberOfFiles)
+	numberOFfFilesStr := strconv.Itoa(numberOfFiles)
 	// Arbitrary size until HEAppE returns the size of each file
 	err = e.SetDatasetInfoCapabilitySizeAttribute(ctx, strconv.Itoa(1000*numberOfFiles))
 	if err != nil {

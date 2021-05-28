@@ -442,10 +442,24 @@ func (d *ddiClient) GetDDIDatasetInfoRequestStatus(token, requestID string) (str
 func (d *ddiClient) GetDataTransferRequestStatus(token, requestID string) (string, string, error) {
 
 	var response RequestStatus
-	err := d.httpStagingClient.doRequest(http.MethodGet, path.Join(ddiStagingStageREST, requestID),
-		[]int{http.StatusOK}, token, nil, &response)
-	if err != nil {
-		err = errors.Wrapf(err, "Failed to submit get status for data transfer request %s", requestID)
+	var err error
+	done := false
+	// Retrying several times as this call regularly returns an error 500 Internal Server Error
+	for i := 1; i < 5 && !done; i++ {
+		err = d.httpStagingClient.doRequest(http.MethodGet, path.Join(ddiStagingStageREST, requestID),
+			[]int{http.StatusOK}, token, nil, &response)
+		done = (err == nil)
+		if err != nil {
+			err = errors.Wrapf(err, "Failed to submit get status for data transfer request %s", requestID)
+			if strings.Contains(err.Error(), "502 Bad Gateway") {
+				log.Printf("Attempt %d of get data transfer request status from %s for request %s failed on error 502 Bad Gateway\n",
+					i, d.httpStagingClient.baseURL, requestID)
+			} else {
+				break
+			}
+			time.Sleep(5 * time.Second)
+		}
+
 	}
 
 	return response.Status, response.TargetPath, err
@@ -487,10 +501,12 @@ func (d *ddiClient) GetReplicationStatus(token, targetSystem, targetPath string)
 	}
 	var response ReplicationStatusResponse
 	var err error
+	done := false
 	// Retrying several times as this call regularly returns an error 500 Internal Server Error
-	for i := 1; i < 5; i++ {
+	for i := 1; i < 5 && !done; i++ {
 		err = d.httpStagingClient.doRequest(http.MethodPost, ddiStagingReplicationStatusREST,
 			[]int{http.StatusOK, http.StatusCreated, http.StatusAccepted}, token, request, &response)
+		done = (err == nil)
 		if err != nil {
 			err = errors.Wrapf(err, "Failed to submit replication status request for system %s path %s", targetSystem, targetPath)
 			if strings.Contains(err.Error(), "500 Internal Server Error") {
